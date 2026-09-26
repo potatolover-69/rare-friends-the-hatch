@@ -1,0 +1,25 @@
+{
+  "name": "rare-friends-the-hatch",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.0.0" },
+  "scripts": {
+    "build": "friendsdk build game --outdir dist",
+    "check": "friendsdk check game",
+    "test:game": "friendsdk test game --width 960",
+    "dev": "friendsdk dev game --outdir dist",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@rarefriends/friendsdk": "0.1.2",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.12",
+    "@types/react-dom": "19.1.9",
+    "typescript": "6.0.3",
+    "wrangler": "^4.41.0"
+  }
+}
