@@ -81,3 +81,18 @@ button,input{font:inherit}
   .rules-box p{font-size:10px}
   .report-grid{grid-template-columns:1fr}
 }
+
+.hatch-game.breach .hatch-canvas{filter:grayscale(1) brightness(.42) contrast(1.72) sepia(.34) hue-rotate(56deg)}
+.hatch-game.breach::before{content:"";position:absolute;inset:0;z-index:7;pointer-events:none;background:radial-gradient(circle at 52% 48%,transparent 22%,rgba(0,0,0,.78) 76%),repeating-linear-gradient(90deg,rgba(255,255,255,.025) 0 1px,transparent 1px 6px);animation:breach-pulse .7s steps(2) infinite}
+.hatch-game.breach .mission-panel{border-color:#c7d0c0;box-shadow:0 0 28px rgba(220,232,212,.12)}
+.hatch-game.breach .hud-panel.right strong{animation:run-flash .55s steps(2) infinite}
+.scare-flash{position:absolute;inset:0;z-index:60;background:rgba(232,239,226,.92);mix-blend-mode:difference;display:grid;place-items:center;pointer-events:none;animation:scare-out .65s steps(2) forwards}
+.scare-face{position:relative;width:150px;height:190px;background:#020302;border:7px solid #e9f0e4;box-shadow:0 0 80px #000}
+.scare-face::before{content:"";position:absolute;left:28px;right:28px;top:28px;height:52px;border:5px solid #e9f0e4;background:#050705}
+.scare-face::after{content:"";position:absolute;left:45px;right:45px;bottom:34px;height:9px;background:#e9f0e4}
+.scare-face i{position:absolute;z-index:2;top:49px;width:13px;height:13px;background:#e9f0e4}
+.scare-face i:first-child{left:48px}.scare-face i:nth-child(2){right:48px}
+.scare-face b{position:absolute;left:67px;top:88px;width:16px;height:62px;background:#e9f0e4;box-shadow:-30px 42px 0 -4px #e9f0e4,30px 42px 0 -4px #e9f0e4}
+@keyframes breach-pulse{0%,100%{opacity:.7}50%{opacity:1}}
+@keyframes run-flash{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes scare-out{0%,35%{opacity:1;transform:scale(1)}55%{opacity:.45;transform:scale(1.04)}100%{opacity:0;transform:scale(1.1)}}
