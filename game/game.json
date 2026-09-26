@@ -1,0 +1,12 @@
+{
+  "name": "Rare Friends: The Hatch",
+  "consumable": "Ward Charge",
+  "price": "100000000000000000",
+  "outcomes": [
+    {
+      "name": "Spent Ward",
+      "chanceBps": 10000,
+      "reward": "0"
+    }
+  ]
+}
