@@ -227,6 +227,22 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   },[client,friendId]);
 
   useEffect(()=>{
+    const body=document.body;
+    const previous=body.dataset.hatchMood;
+    let mood="idle";
+    if(act===1)mood=power?"powered":"blackout";
+    else if(act===2)mood="reflection";
+    else if(act===3)mood="shift";
+    else if(act===4)mood=chase?"danger":"watching";
+    else if(act===5)mood="breach";
+    else if(act===6)mood=chase?"danger":"replacement";
+    else if(act===7)mood="sunrise";
+    else if(act===8)mood="failure";
+    body.dataset.hatchMood=mood;
+    return()=>{if(previous===undefined)delete body.dataset.hatchMood;else body.dataset.hatchMood=previous;};
+  },[act,power,chase]);
+
+  useEffect(()=>{
     if(seconds<=0||paused||menu||mapOpen||act===0||act>=7)return;
     const t=setTimeout(()=>setSeconds(v=>v-1),1000);return()=>clearTimeout(t);
   },[seconds,paused,menu,mapOpen,act]);
@@ -308,7 +324,6 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       if(act===6&&!identitySolved){
         drawFriend(ctx,sprites,{x:Z.pond.x-120,y:Z.pond.y-10},"down",false,0,"right",.6,true);
       }
-      drawFriend(ctx,sprites,p,facingRef.current,dist(before,p)>.1,Math.floor(now/110)%8,sideRef.current);
       ctx.restore();
 
       // darkness + a real visible flashlight beam in screen space
@@ -358,6 +373,12 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
         ctx.globalCompositeOperation="source-over";
       }
       if(act===4&&watching&&!chase){ctx.fillStyle="rgba(235,242,231,.08)";ctx.fillRect(0,0,VIEW.width,VIEW.height);}
+      ctx.restore();
+
+      // Keep the selected Rare Friend crisp and canonical above the lighting pass.
+      ctx.save();
+      ctx.translate(-cam.current.x,-cam.current.y);
+      drawFriend(ctx,sprites,p,facingRef.current,dist(before,p)>.1,Math.floor(now/110)%8,sideRef.current);
       ctx.restore();
 
       raf=requestAnimationFrame(loop);
