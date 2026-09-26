@@ -11,7 +11,7 @@ import "./style.css";
 
 type Point = { x: number; y: number };
 type Phase = "intro" | "study" | "patrol" | "finale" | "won" | "lost";
-type Menu = "report" | "ward" | "store" | "inventory" | "settings" | null;
+type Menu = "report" | "store" | "inventory" | "settings" | null;
 type Verdict = "hatch" | "garden" | "mimic" | "safe";
 
 const VIEW = { width: 960, height: 640 };
@@ -346,7 +346,7 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
 
   function handleCaught(reason:string){
     setBreach(false);setScare(true);position.current={...SPAWN};destination.current=null;
-    const next=corruption+1;setCorruption(next);setMessage(reason);sound.current?.play("impact");
+    let next=corruption+1;if(inventory.chalk>0){setInventory(v=>({...v,chalk:Math.max(0,(v.chalk??0)-1)}));next=corruption;setMessage(reason+" Chalk Seal absorbed the corruption.");}else setMessage(reason);setCorruption(next);sound.current?.play("impact");
     if(next>=3){setPhase("finale");setSeconds(30);setBreach(true);setBreachSeconds(30);hunter.current={x:900,y:535};setMessage("FINAL CONTAINMENT — reach the Hatch. Hold position and seal it before the Mimic reaches you.");}
   }
 
@@ -362,7 +362,7 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
   }
 
   function failWatch(reason:string){
-    const next=corruption+1;setCorruption(next);setMessage(reason);setBreach(false);sound.current?.play("impact");
+    let next=corruption+1;if(inventory.chalk>0){setInventory(v=>({...v,chalk:Math.max(0,(v.chalk??0)-1)}));next=corruption;setMessage(reason+" Chalk Seal absorbed the corruption.");}else setMessage(reason);setCorruption(next);setBreach(false);sound.current?.play("impact");
     if(next>=3){setPhase("finale");setSeconds(30);setBreach(true);setBreachSeconds(30);hunter.current={x:900,y:535};setMessage("FINAL CONTAINMENT — reach the Hatch. Hold position and seal it before the Mimic reaches you.");return;}advanceWatch();
   }
 
@@ -380,18 +380,39 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
     }else{setMenu(null);failWatch(`Wrong report. The disturbance was: ${verdict.toUpperCase()}.`);}
   }
 
-  async function buyWard(){
-    if(!snapshot||busy)return;setBusy(true);
-    try{await client.buy(1n);setSnapshot(await client.read());setMessage("Ward Charge purchased (simulated RF).");sound.current?.play("purchase");}
-    catch(e){setMessage(e instanceof Error?e.message:"Ward purchase failed.");}finally{setBusy(false);}
-  }
-  async function useWard(){
-    if(!snapshot||snapshot.consumables<1n||busy||phase!=="patrol")return;setBusy(true);
+  async function purchaseSupply(item:(typeof SUPPLIES)[number]){
+    if(!snapshot||busy)return;
+    const units=Math.max(1,Math.round(item.cost/.1));
+    setBusy(true);
     try{
-      const play=(await client.play(1n))[0];await client.settle(play.id);setSnapshot(await client.read());
-      const hint=verdict==="safe"?"WARD: no disturbance detected.":verdict==="hatch"?"WARD: strongest signal at THE HATCH.":verdict==="mimic"?"WARD: there are TWO Friends in the Garden.":"WARD: distortion in the GARDEN.";
-      setWardHint(hint);setMessage(hint);sound.current?.play("reveal-common");
-    }finally{setBusy(false);}
+      await client.buy(BigInt(units));
+      const plays=await client.play(BigInt(units));
+      for(const play of plays)await client.settle(play.id);
+      setSnapshot(await client.read());
+      setInventory(v=>({...v,[item.key]:(v[item.key]??0)+1}));
+      setRfSpent(v=>v+item.cost);
+      setMessage(item.name+" prepared. Simulated RF activity recorded.");
+      sound.current?.play("purchase");
+    }catch(e){setMessage(e instanceof Error?e.message:"Supply purchase failed.");}
+    finally{setBusy(false);}
+  }
+
+  function useSupply(key:string){
+    if(!inventory[key])return;
+    setInventory(v=>({...v,[key]:Math.max(0,(v[key]??0)-1)}));
+    if(key==="ward"){
+      const hint=verdict==="safe"?"WARD: the Garden is quiet.":verdict==="hatch"?"WARD: pressure is strongest below the Hatch.":verdict==="mimic"?"WARD: there are TWO Friends in the Garden.":"WARD: the Garden geometry is wrong.";
+      setWardHint(hint);setMessage(hint);
+    }else if(key==="bell"&&breach){
+      setBreach(false);setMessage("The Bell rings once. The Mimic retreats.");
+    }else if(key==="fuse"){
+      setBreach(false);setMessage("Emergency Fuse restores the safe-zone lamp.");
+    }else if(key==="mirror"){
+      setMessage(verdict==="mimic"?"MIRROR: the other Friend has no true reflection.":"MIRROR: no false Friend is nearby.");
+    }else if(key==="chalk"){
+      setMessage("Chalk Seal armed. Your next corruption mistake will be absorbed.");
+    }
+    sound.current?.play("reveal-common");
   }
 
   const checked=inspected.size,canReport=phase==="patrol"&&checked===3&&!breach;
@@ -420,7 +441,6 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
     {phase==="patrol"&&<div className="action-stack">
       <button disabled={breach} onClick={()=>setMenu("inventory")}>INVENTORY</button>
       <button disabled={breach} onClick={()=>setMenu("store")}>RF SUPPLIES</button>
-      <button disabled={breach} onClick={()=>setMenu("ward")}>WARD · {snapshot?.consumables.toString()??"0"}</button>
       <button className="report-btn" disabled={!canReport} onClick={()=>setMenu("report")}>{breach?"RUN!":canReport?"FILE REPORT":`PATROL ${checked}/3`}</button>
     </div>}
 
@@ -452,16 +472,9 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
       <button onClick={()=>report("safe")}><b>ALL CLEAR</b><small>Nothing changed.</small></button>
     </div></GameMenu>}
 
-    {menu==="store"&&<GameMenu title="RF SUPPLY CABINET" onClose={()=>setMenu(null)}><p>Prototype economy: preparation and protection consume RF; skill earns Watch XP.</p><div className="store-grid">{SUPPLIES.map(item=><button key={item.key} onClick={()=>{setInventory(v=>({...v,[item.key]:(v[item.key]??0)+1}));setRfSpent(v=>v+item.cost);setMessage(item.name+" prepared (simulated RF).");}}><b>{item.name}</b><small>{item.cost.toFixed(2)} RF · {item.description}</small></button>)}</div><p>Spent {rfSpent.toFixed(2)} RF · burn {(rfSpent*0.5).toFixed(2)} · rewards {(rfSpent*0.5).toFixed(2)}</p></GameMenu>}
+    {menu==="store"&&<GameMenu title="RF SUPPLY CABINET" onClose={()=>setMenu(null)}><p>Prototype economy: preparation and protection consume RF; skill earns Watch XP.</p><div className="store-grid">{SUPPLIES.map(item=><button key={item.key} disabled={busy} onClick={()=>void purchaseSupply(item)}><b>{item.name}</b><small>{item.cost.toFixed(2)} RF · {item.description}</small></button>)}</div><p>Spent {rfSpent.toFixed(2)} RF · burn {(rfSpent*0.5).toFixed(2)} · rewards {(rfSpent*0.5).toFixed(2)}</p></GameMenu>}
 
-    {menu==="inventory"&&<GameMenu title="INVENTORY" onClose={()=>setMenu(null)}><div className="store-grid">{SUPPLIES.map(item=><button key={item.key} disabled={!inventory[item.key]} onClick={()=>{if(!inventory[item.key])return;setInventory(v=>({...v,[item.key]:Math.max(0,(v[item.key]??0)-1)}));if(item.key==="bell"&&breach){setBreach(false);setMessage("The Bell drives the Mimic back into the dark.");}else if(item.key==="fuse"){setMessage("The Emergency Fuse stabilizes the lamp circuit.");}else if(item.key==="mirror"){setMessage("Mirror Shard: your reflection is true; the other Friend is not.");}else if(item.key==="chalk"){setMessage("Chalk Seal prepared around the Hatch.");}else{setMessage("Ward: listen for the strongest disturbance.");}}}><b>{item.name} × {inventory[item.key]??0}</b><small>{item.description}</small></button>)}</div></GameMenu>}
-
-    {menu==="ward"&&<GameMenu title="WARD CABINET" onClose={()=>setMenu(null)}>
-      <p>Ward Charges cost {snapshot?rf(client.definition.price):"0.1 RF"} simulated RF and point toward the suspicious zone.</p>
-      <p>Balance: {snapshot?rf(snapshot.rfBalance):"—"} · Charges: {snapshot?.consumables.toString()??"0"}</p>
-      <button disabled={busy||!snapshot||snapshot.rfBalance<client.definition.price} onClick={()=>void buyWard()}>BUY WARD</button>
-      <button disabled={busy||!snapshot||snapshot.consumables<1n||phase!=="patrol"} onClick={()=>void useWard()}>USE WARD</button><p>{wardHint||"A Ward gives one directional clue."}</p>
-    </GameMenu>}
+    {menu==="inventory"&&<GameMenu title="INVENTORY" onClose={()=>setMenu(null)}><div className="store-grid">{SUPPLIES.map(item=><button key={item.key} disabled={!inventory[item.key]} onClick={()=>useSupply(item.key)}><b>{item.name} × {inventory[item.key]??0}</b><small>{item.description}</small></button>)}</div></GameMenu>}
 
     {menu==="settings"&&<GameMenu title="SETTINGS" onClose={()=>setMenu(null)}>
       <button onClick={()=>{const n=!muted;setMuted(n);sound.current?.setMuted(n);}}>{muted?"SOUND: OFF":"SOUND: ON"}</button>
