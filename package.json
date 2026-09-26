@@ -5,11 +5,12 @@
   "type": "module",
   "engines": { "node": ">=22.0.0" },
   "scripts": {
-    "postinstall": "npm run build --prefix node_modules/@rarefriends/friendsdk",
-    "build": "node node_modules/@rarefriends/friendsdk/scripts/dev-game.mjs build game --outdir dist",
-    "check": "node node_modules/@rarefriends/friendsdk/scripts/dev-game.mjs check game",
-    "test:game": "node node_modules/@rarefriends/friendsdk/scripts/dev-game.mjs test game --width 960",
-    "dev": "node node_modules/@rarefriends/friendsdk/scripts/dev-game.mjs dev game --outdir dist",
+    "build:sdk": "cd node_modules/@rarefriends/friendsdk && npm install && npm run build",
+    "build:game": "node node_modules/@rarefriends/friendsdk/scripts/dev-game.mjs build game --outdir dist",
+    "build": "npm run build:sdk && npm run build:game",
+    "check": "npm run build:sdk && node node_modules/@rarefriends/friendsdk/scripts/dev-game.mjs check game",
+    "test:game": "npm run build:sdk && node node_modules/@rarefriends/friendsdk/scripts/dev-game.mjs test game --width 960",
+    "dev": "npm run build:sdk && node node_modules/@rarefriends/friendsdk/scripts/dev-game.mjs dev game --outdir dist",
     "deploy": "wrangler deploy"
   },
   "dependencies": {
