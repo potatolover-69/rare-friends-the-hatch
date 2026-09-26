@@ -4,9 +4,9 @@
   "price": "100000000000000000",
   "outcomes": [
     {
-      "name": "Spent Ward",
+      "name": "Ward Ash",
       "chanceBps": 10000,
-      "reward": "0"
+      "reward": "1"
     }
   ]
 }
