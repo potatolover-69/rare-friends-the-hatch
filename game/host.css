@@ -1,4 +1,4 @@
 :root {
-  --rf-game-max-width: 960px;
-  --rf-game-aspect-ratio: 3 / 2;
+  --rf-game-max-width: 1200px;
+  --rf-game-aspect-ratio: 16 / 9;
 }
