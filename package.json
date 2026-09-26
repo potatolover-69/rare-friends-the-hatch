@@ -3,11 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": {
-    "node": ">=22.0.0"
-  },
+  "engines": { "node": ">=22.0.0" },
   "scripts": {
-    "build:sdk": "cd node_modules/@rarefriends/friendsdk && npm install && cd ../../.. && node scripts/patch-friendsdk.mjs && cd node_modules/@rarefriends/friendsdk && npm run build",
+    "build:sdk": "cd node_modules/@rarefriends/friendsdk && npm install && npm run build",
     "build:game": "node node_modules/@rarefriends/friendsdk/scripts/dev-game.mjs build game --outdir dist",
     "build": "npm run build:sdk && npm run build:game",
     "check": "npm run build:sdk && node node_modules/@rarefriends/friendsdk/scripts/dev-game.mjs check game",
