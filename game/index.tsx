@@ -311,16 +311,50 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       drawFriend(ctx,sprites,p,facingRef.current,dist(before,p)>.1,Math.floor(now/110)%8,sideRef.current);
       ctx.restore();
 
-      // darkness and flashlight in screen space
+      // darkness + a real visible flashlight beam in screen space
       const sx=p.x-cam.current.x,sy=p.y-cam.current.y;
-      ctx.save();ctx.fillStyle=power&&near(p,Z.lamp,260)?"rgba(0,0,0,.46)":"rgba(0,0,0,.72)";ctx.fillRect(0,0,VIEW.width,VIEW.height);
+      ctx.save();
+      ctx.fillStyle=power&&near(p,Z.lamp,260)?"rgba(0,0,0,.42)":"rgba(0,0,0,.76)";
+      ctx.fillRect(0,0,VIEW.width,VIEW.height);
       if(flashlight){
         const ang=facingRef.current==="left"?Math.PI:facingRef.current==="right"?0:facingRef.current==="up"?-Math.PI/2:Math.PI/2;
+        const length=445,spread=.40;
+        const x1=sx+Math.cos(ang-spread)*length,y1=sy+Math.sin(ang-spread)*length;
+        const x2=sx+Math.cos(ang+spread)*length,y2=sy+Math.sin(ang+spread)*length;
+
+        // Cut the darkness away inside the beam and around the Friend.
         ctx.globalCompositeOperation="destination-out";
-        const rad=ctx.createRadialGradient(sx,sy,12,sx,sy,115);rad.addColorStop(0,"rgba(0,0,0,.94)");rad.addColorStop(1,"rgba(0,0,0,0)");
-        ctx.fillStyle=rad;ctx.beginPath();ctx.arc(sx,sy,115,0,Math.PI*2);ctx.fill();
-        const length=430,spread=.42;ctx.beginPath();ctx.moveTo(sx,sy);ctx.arc(sx,sy,length,ang-spread,ang+spread);ctx.closePath();
-        const cone=ctx.createRadialGradient(sx,sy,28,sx,sy,length);cone.addColorStop(0,"rgba(0,0,0,.97)");cone.addColorStop(.65,"rgba(0,0,0,.72)");cone.addColorStop(1,"rgba(0,0,0,0)");ctx.fillStyle=cone;ctx.fill();
+        const local=ctx.createRadialGradient(sx,sy,8,sx,sy,118);
+        local.addColorStop(0,"rgba(0,0,0,1)");
+        local.addColorStop(.72,"rgba(0,0,0,.78)");
+        local.addColorStop(1,"rgba(0,0,0,0)");
+        ctx.fillStyle=local;ctx.beginPath();ctx.arc(sx,sy,118,0,Math.PI*2);ctx.fill();
+
+        ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(x1,y1);
+        ctx.quadraticCurveTo(sx+Math.cos(ang)*length*1.08,sy+Math.sin(ang)*length*1.08,x2,y2);
+        ctx.closePath();
+        const reveal=ctx.createRadialGradient(sx,sy,30,sx,sy,length);
+        reveal.addColorStop(0,"rgba(0,0,0,1)");
+        reveal.addColorStop(.58,"rgba(0,0,0,.86)");
+        reveal.addColorStop(1,"rgba(0,0,0,.14)");
+        ctx.fillStyle=reveal;ctx.fill();
+
+        // Visible warm-white flashlight light, instead of the old black wedge.
+        ctx.globalCompositeOperation="screen";
+        ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(x1,y1);
+        ctx.quadraticCurveTo(sx+Math.cos(ang)*length*1.08,sy+Math.sin(ang)*length*1.08,x2,y2);
+        ctx.closePath();
+        const beam=ctx.createRadialGradient(sx,sy,24,sx,sy,length);
+        beam.addColorStop(0,"rgba(255,249,220,.32)");
+        beam.addColorStop(.35,"rgba(255,246,206,.22)");
+        beam.addColorStop(.78,"rgba(244,242,218,.10)");
+        beam.addColorStop(1,"rgba(244,242,218,0)");
+        ctx.fillStyle=beam;ctx.fill();
+
+        const hotspot=ctx.createRadialGradient(sx,sy,4,sx,sy,72);
+        hotspot.addColorStop(0,"rgba(255,252,231,.30)");
+        hotspot.addColorStop(1,"rgba(255,252,231,0)");
+        ctx.fillStyle=hotspot;ctx.beginPath();ctx.arc(sx,sy,72,0,Math.PI*2);ctx.fill();
         ctx.globalCompositeOperation="source-over";
       }
       if(act===4&&watching&&!chase){ctx.fillStyle="rgba(235,242,231,.08)";ctx.fillRect(0,0,VIEW.width,VIEW.height);}
