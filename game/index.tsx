@@ -11,12 +11,13 @@ import { createFriendSoundKit, type FriendSoundKit } from "@rarefriends/friendsd
 import "./style.css";
 
 type AnomalyKind = "safe" | "movement" | "missing" | "duplicate" | "distortion" | "hatch" | "presence";
-type Phase = "intro" | "watch" | "won" | "lost";
+type Phase = "intro" | "study" | "watch" | "won" | "lost";
 type Menu = "report" | "ward" | "settings" | null;
 
 const base = getWorldPreset("01-garden-oval-complete");
 const spawn = [288, 192] as const;
 const ROUND_SECONDS = 22;
+const STUDY_SECONDS = 8;
 const TOTAL_ROUNDS = 8;
 
 const anomalyNames: Record<AnomalyKind, string> = {
@@ -84,12 +85,13 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
   const [corruption, setCorruption] = useState(0);
   const [score, setScore] = useState(0);
   const [menu, setMenu] = useState<Menu>(null);
-  const [message, setMessage] = useState("Walk the garden. Learn what normal looks like.");
+  const [message, setMessage] = useState("The garden is quiet.");
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
   const [muted, setMuted] = useState(true);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [wardSignal, setWardSignal] = useState("");
+  const [shock, setShock] = useState(false);
   const sound = useRef<FriendSoundKit | null>(null);
   const lock = useRef(false);
 
@@ -112,21 +114,34 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
   }, [client, friendId]);
 
   useEffect(() => {
-    if (phase !== "watch" || paused || menu || seconds <= 0) return;
+    if (!["study", "watch"].includes(phase) || paused || menu || seconds <= 0) return;
     const timer = window.setTimeout(() => setSeconds((value) => value - 1), 1000);
     return () => window.clearTimeout(timer);
   }, [phase, paused, menu, seconds]);
 
   useEffect(() => {
-    if (phase !== "watch" || seconds !== 0) return;
-    resolveReport("timeout");
+    if (phase === "study" && seconds === 0) {
+      setPhase("watch");
+      setSeconds(ROUND_SECONDS);
+      setMessage("WATCH 1/8 — Something may have changed.");
+      setToast("MIDNIGHT");
+      sound.current?.play("select");
+      return;
+    }
+    if (phase === "watch" && seconds === 0) resolveReport("timeout");
   }, [seconds, phase]);
 
   useEffect(() => {
     if (!toast) return;
-    const t = window.setTimeout(() => setToast(""), 1600);
+    const t = window.setTimeout(() => setToast(""), 1500);
     return () => window.clearTimeout(t);
   }, [toast]);
+
+  useEffect(() => {
+    if (!shock) return;
+    const t = window.setTimeout(() => setShock(false), 850);
+    return () => window.clearTimeout(t);
+  }, [shock]);
 
   async function refresh() {
     setSnapshot(await client.read());
@@ -149,13 +164,14 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
   }
 
   function beginNight() {
-    setPhase("watch");
+    setPhase("study");
     setRound(0);
-    setSeconds(ROUND_SECONDS);
+    setSeconds(STUDY_SECONDS);
     setCorruption(0);
     setScore(0);
     setWardSignal("");
-    setMessage("WATCH 1/8 — Something may change. Observe before you report.");
+    setShock(false);
+    setMessage("MEMORIZE THE GARDEN — Learn what normal looks like.");
     void sound.current?.unlock();
     sound.current?.play("select");
   }
@@ -165,6 +181,7 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
       setPhase("lost");
       setMenu(null);
       setMessage("The hatch learned your name.");
+      setShock(true);
       sound.current?.play("impact");
       return;
     }
@@ -197,6 +214,7 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
     } else {
       setToast(choice === "timeout" ? "TOO LATE" : "WRONG");
       setMessage(choice === "timeout" ? "You waited too long. Something moved below you." : `Wrong report. It was: ${anomalyNames[anomaly]}.`);
+      setShock(true);
       sound.current?.play("impact");
     }
     window.setTimeout(() => nextRound(nextCorruption, nextScore), 1300);
@@ -230,35 +248,44 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
   }
 
   const canAct = phase === "watch" && !busy && !paused;
-  const corruptionClass = corruption >= 3 ? "corrupt-3" : corruption >= 2 ? "corrupt-2" : "";
-  return <section className={`hatch-game ${corruptionClass} ${reducedMotion ? "reduced" : ""}`} aria-label="Rare Friends: The Hatch">
-    <div className="hatch-world" inert={Boolean(menu) || paused || phase !== "watch" || undefined}>
+  const corruptionClass = corruption >= 3 ? "corrupt-3" : corruption >= 2 ? "corrupt-2" : corruption >= 1 ? "corrupt-1" : "";
+  const stateLabel = corruption >= 2 ? "CONTAINMENT UNSTABLE" : corruption === 1 ? "DISTURBANCE DETECTED" : "CALM WATCH";
+  return <section className={`hatch-game ${corruptionClass} ${shock ? "shock" : ""} ${reducedMotion ? "reduced" : ""}`} aria-label="Rare Friends: The Hatch">
+    <div className="hatch-world" inert={Boolean(menu) || paused || !["study","watch"].includes(phase) || undefined}>
       <GameWorld
         world={world}
         spawn={spawn}
         interactions={[]}
         friendId={friendId}
-        paused={Boolean(menu) || paused || phase !== "watch"}
+        paused={Boolean(menu) || paused || !["study","watch"].includes(phase)}
         reducedMotion={reducedMotion}
       />
-      {(anomaly === "hatch" || corruption >= 2) && <div className={`anomaly-hatch ${anomaly === "hatch" ? "open" : ""}`} aria-hidden="true" />}
-      {anomaly === "presence" && <div className="anomaly-eyes" aria-label="A pair of eyes watches from the garden"><i /><i /></div>}
-      {corruption >= 1 && <div className="anomaly-static" aria-hidden="true" />}
-      {corruption >= 2 && anomaly !== "presence" && <div className="anomaly-shadow" aria-hidden="true" />}
-      {corruption >= 2 && <div className="watcher" aria-hidden="true" />}
+      <div className="moon" aria-hidden="true" />
+      <div className="lamp-glow" aria-hidden="true" />
+      <div className="fog fog-a" aria-hidden="true" />
+      <div className="fog fog-b" aria-hidden="true" />
+      <div className={`central-hatch ${anomaly === "hatch" || corruption >= 1 ? "ajar" : ""} ${corruption >= 2 ? "open" : ""}`} aria-hidden="true">
+        <span className="hatch-eye left" /><span className="hatch-eye right" />
+      </div>
+      {anomaly === "presence" && <div className="presence-figure" aria-label="A figure is watching the garden"><span /><span /></div>}
+      {corruption >= 1 && <div className="static-layer" aria-hidden="true" />}
+      {corruption >= 2 && <div className="corrupt-duplicate" aria-hidden="true"><i /><i /><b /></div>}
+      {corruption >= 2 && <div className="tendril t1" aria-hidden="true" />}
+      {corruption >= 2 && <div className="tendril t2" aria-hidden="true" />}
     </div>
 
     <div className="hatch-hud">
-      <div className="hatch-card">
+      <div className="hatch-card hatch-card-left">
         <div className="hatch-title">RARE FRIENDS // NIGHT WATCH</div>
         <div className="hatch-sub">Friend {String(friendId)} · seed-bound shift</div>
+        <div className="hatch-state">{stateLabel}</div>
         <div className="hatch-meter" aria-label={`Corruption ${corruption} of 3`}>
           {[0,1,2].map((i) => <i key={i} className={`hatch-mark ${i < corruption ? "on" : ""}`} />)}
         </div>
       </div>
-      <div className="hatch-card">
-        <div className="hatch-clock">{phase === "watch" ? `00:${String(seconds).padStart(2,"0")}` : phase === "won" ? "06:00" : "00:00"}</div>
-        <div className="hatch-sub">{phase === "watch" ? `WATCH ${round + 1}/${TOTAL_ROUNDS} · ${score} correct` : `${score}/${TOTAL_ROUNDS} reports correct`}</div>
+      <div className="hatch-card hatch-card-right">
+        <div className="hatch-clock">{phase === "study" ? `00:${String(seconds).padStart(2,"0")}` : phase === "watch" ? `00:${String(seconds).padStart(2,"0")}` : phase === "won" ? "06:00" : "00:00"}</div>
+        <div className="hatch-sub">{phase === "study" ? "MEMORIZE" : phase === "watch" ? `WATCH ${round + 1}/${TOTAL_ROUNDS} · ${score} correct` : `${score}/${TOTAL_ROUNDS} reports correct`}</div>
       </div>
     </div>
 
