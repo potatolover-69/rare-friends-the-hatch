@@ -10,9 +10,9 @@ import { createFriendSoundKit, type FriendSoundKit } from "@rarefriends/friendsd
 import "./style.css";
 
 type Point = { x: number; y: number };
-type Phase = "intro" | "study" | "patrol" | "won" | "lost";
+type Phase = "intro" | "study" | "patrol" | "finale" | "won" | "lost";
 type Menu = "report" | "ward" | "store" | "inventory" | "settings" | null;
-type Verdict = "hatch" | "garden" | "presence" | "safe";
+type Verdict = "hatch" | "garden" | "mimic" | "safe";
 
 const VIEW = { width: 960, height: 640 };
 const WORLD = { width: 1780, height: 1160 };
@@ -68,7 +68,7 @@ function seedFromFriend(friendId: unknown) {
 function watchSequence(seed: number): Verdict[] {
   let state = seed || 1;
   const next = () => ((state = (Math.imul(state, 1664525) + 1013904223) >>> 0) / 4294967296);
-  const pool: Verdict[] = ["hatch", "garden", "presence", "safe", "garden", "presence"];
+  const pool: Verdict[] = ["hatch", "garden", "mimic", "safe", "garden", "mimic"];
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(next() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
@@ -187,7 +187,7 @@ function drawWorld(ctx: CanvasRenderingContext2D, corruption: number, verdict: V
     ctx.fillStyle="#f2f6e5"; ctx.fillRect(hatch.x+58,hatch.y+44,7,5); ctx.fillRect(hatch.x+95,hatch.y+44,7,5);
   }
 
-  if (verdict==="presence" && !breach) {
+  if (verdict==="mimic" && !breach) {
     ctx.fillStyle="#010201"; ctx.fillRect(1128,330,34,90); ctx.beginPath(); ctx.arc(1145,315,22,0,Math.PI*2); ctx.fill();
     ctx.fillStyle="#edf5df"; ctx.fillRect(1137,311,4,4); ctx.fillRect(1152,311,4,4);
   }
@@ -247,7 +247,7 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
   },[client,friendId]);
 
   useEffect(()=>{
-    if(!["study","patrol"].includes(phase)||paused||menu||seconds<=0)return;
+    if(!["study","patrol","finale"].includes(phase)||paused||menu||seconds<=0)return;
     const t=window.setTimeout(()=>setSeconds(v=>v-1),1000); return()=>clearTimeout(t);
   },[phase,paused,menu,seconds]);
 
@@ -287,7 +287,7 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
     const frame=(now:number)=>{
       pulse++;const dt=prev?Math.min((now-prev)/1000,.05):0;prev=now;
       const p=position.current,before={...p};
-      if(!paused&&menu===null&&["study","patrol"].includes(phase)){
+      if(!paused&&menu===null&&["study","patrol","finale"].includes(phase)){
         const down=(a:string,b:string)=>keys.current.has(a)||keys.current.has(b);
         let dx=Number(down("d","arrowright"))-Number(down("a","arrowleft"));
         let dy=Number(down("s","arrowdown"))-Number(down("w","arrowup"));
@@ -308,7 +308,9 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
           const vx=p.x-h.x,vy=p.y-h.y,d=Math.max(1,Math.hypot(vx,vy));
           const hs=(150+watch*16)*dt;
           h.x+=vx/d*hs;h.y+=vy/d*hs;
-          if(distance(p,CHECKPOINTS[0])<84&&!breachGuard.current){
+          if(phase==="finale"&&distance(p,CHECKPOINTS[1])<92&&!breachGuard.current){
+            breachGuard.current=true;setBreach(false);setPhase("won");setWatchXp(v=>v+150);setMessage("FINAL SEAL COMPLETE — the Hatch closes at sunrise.");sound.current?.play("reward");
+          }else if(phase!=="finale"&&distance(p,CHECKPOINTS[0])<84&&!breachGuard.current){
             breachGuard.current=true;setBreach(false);setMessage("SAFE LIGHT — The thing recoils into the dark.");sound.current?.play("reward");
             window.setTimeout(()=>{breachGuard.current=false;},500);
           }else if(distance(p,h)<36&&!breachGuard.current){
@@ -345,7 +347,7 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
   function handleCaught(reason:string){
     setBreach(false);setScare(true);position.current={...SPAWN};destination.current=null;
     const next=corruption+1;setCorruption(next);setMessage(reason);sound.current?.play("impact");
-    if(next>=3)setPhase("lost");
+    if(next>=3){setPhase("finale");setSeconds(30);setBreach(true);setBreachSeconds(30);hunter.current={x:900,y:535};setMessage("FINAL CONTAINMENT — reach the Hatch. Hold position and seal it before the Mimic reaches you.");}
   }
 
   function inspectCheckpoint(index:number){
@@ -354,14 +356,14 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
     let text=`${cp.name}: looks normal.`;
     if(verdict==="hatch"&&cp.id==="hatch")text="THE HATCH: the seam is open. Two eyes are below the lid.";
     if(verdict==="garden"&&(cp.id==="lamp"||cp.id==="pond"))text=`${cp.name}: something here does not match your memory.`;
-    if(verdict==="presence"&&cp.id==="pond")text="POND & SHRINE: a figure is standing beyond the trees.";
-    setMessage(text);sound.current?.play(verdict==="presence"?"impact":"select");
-    if(verdict==="presence"&&cp.id==="pond")setScare(true);
+    if(verdict==="mimic"&&cp.id==="pond")text="POND & SHRINE: a figure is standing beyond the trees.";
+    setMessage(text);sound.current?.play(verdict==="mimic"?"impact":"select");
+    if(verdict==="mimic"&&cp.id==="pond")setScare(true);
   }
 
   function failWatch(reason:string){
     const next=corruption+1;setCorruption(next);setMessage(reason);setBreach(false);sound.current?.play("impact");
-    if(next>=3){setPhase("lost");return;}advanceWatch();
+    if(next>=3){setPhase("finale");setSeconds(30);setBreach(true);setBreachSeconds(30);hunter.current={x:900,y:535};setMessage("FINAL CONTAINMENT — reach the Hatch. Hold position and seal it before the Mimic reaches you.");return;}advanceWatch();
   }
 
   function advanceWatch(){
@@ -387,7 +389,7 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
     if(!snapshot||snapshot.consumables<1n||busy||phase!=="patrol")return;setBusy(true);
     try{
       const play=(await client.play(1n))[0];await client.settle(play.id);setSnapshot(await client.read());
-      const hint=verdict==="safe"?"WARD: no disturbance detected.":verdict==="hatch"?"WARD: strongest signal at THE HATCH.":verdict==="presence"?"WARD: movement beyond the POND.":"WARD: distortion in the GARDEN.";
+      const hint=verdict==="safe"?"WARD: no disturbance detected.":verdict==="hatch"?"WARD: strongest signal at THE HATCH.":verdict==="mimic"?"WARD: there are TWO Friends in the Garden.":"WARD: distortion in the GARDEN.";
       setWardHint(hint);setMessage(hint);sound.current?.play("reveal-common");
     }finally{setBusy(false);}
   }
@@ -396,7 +398,7 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
   return <section className={`hatch-game corruption-${corruption} ${breach?"breach":""}`}>
     <canvas ref={canvas} width={VIEW.width} height={VIEW.height} className="hatch-canvas"
       onPointerDown={e=>{
-        if(!["study","patrol"].includes(phase)||paused||menu)return;
+        if(!["study","patrol","finale"].includes(phase)||paused||menu)return;
         const rect=e.currentTarget.getBoundingClientRect();
         destination.current={x:camera.current.x+(e.clientX-rect.left)*VIEW.width/rect.width,y:camera.current.y+(e.clientY-rect.top)*VIEW.height/rect.height};
       }}/>
@@ -407,10 +409,10 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
       <div className="hud-panel right"><strong>{breach?`RUN ${breachSeconds}`:phase==="won"?"06:00":`00:${String(seconds).padStart(2,"0")}`}</strong><span>{checked}/3 checkpoints · {score} correct</span></div>
     </div>
 
-    {["study","patrol"].includes(phase)&&<div className="mission-panel">
-      <strong>{breach?"BREACH — REACH THE LAMP":phase==="study"?"MEMORIZE THE GARDEN":"PATROL OBJECTIVE"}</strong>
+    {["study","patrol","finale"].includes(phase)&&<div className="mission-panel">
+      <strong>{phase==="finale"?"FINAL CONTAINMENT — REACH THE HATCH":breach?"BREACH — REACH THE LAMP":phase==="study"?"MEMORIZE THE GARDEN":"PATROL OBJECTIVE"}</strong>
       {CHECKPOINTS.map(c=><span key={c.id} className={inspected.has(c.id)?"done":""}>{inspected.has(c.id)?"✓":"□"} {c.name}</span>)}
-      <small>{breach?"The light is safe. The thing is not.":phase==="patrol"?"Inspect all 3, then file one report.":"Learn the route before midnight."}</small>
+      <small>{phase==="finale"?"The Mimic is loose. Touch the Hatch before it reaches you.":breach?"The light is safe. The thing is not.":phase==="patrol"?"Inspect all 3, then file one report.":"Learn the route before midnight."}</small>
     </div>}
 
     {near>=0&&phase==="patrol"&&!breach&&<button className="inspect-btn" onClick={()=>inspectCheckpoint(near)}>INSPECT · {CHECKPOINTS[near].name} <small>E</small></button>}
@@ -433,7 +435,7 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
         <p>1. Patrol Lamp & Bench, The Hatch, and Pond & Shrine.</p>
         <p>2. Press INSPECT when you reach each marker.</p>
         <p>3. On later watches, the hatch may BREACH. Run to the lamp before the thing catches you.</p>
-        <p>4. After the patrol, report HATCH, GARDEN, PRESENCE, or ALL CLEAR.</p>
+        <p>4. After the patrol, report HATCH, GARDEN, MIMIC, or ALL CLEAR.</p>
         <p>Three corruption marks trigger final containment.</p><p>RF supplies are simulated: each purchase models 50% burn / 50% Active Friend rewards.</p></div>
       <button onClick={startNight}>START NIGHT WATCH</button><button onClick={()=>setMenu("settings")}>SETTINGS</button>
     </div></div>}
@@ -446,7 +448,7 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
     {menu==="report"&&<GameMenu title="FILE REPORT" onClose={()=>setMenu(null)}><p>What did your patrol confirm?</p><div className="report-grid">
       <button onClick={()=>report("hatch")}><b>HATCH</b><small>The hatch opened or changed.</small></button>
       <button onClick={()=>report("garden")}><b>GARDEN</b><small>An object, tree, bench or pond changed.</small></button>
-      <button onClick={()=>report("presence")}><b>PRESENCE</b><small>A figure appeared in the garden.</small></button>
+      <button onClick={()=>report("mimic")}><b>MIMIC</b><small>A false version of your Friend appeared.</small></button>
       <button onClick={()=>report("safe")}><b>ALL CLEAR</b><small>Nothing changed.</small></button>
     </div></GameMenu>}
 
