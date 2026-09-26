@@ -1,3 +1,66 @@
+
+const BLOCKSCOUT_API = "https://robinhoodchain.blockscout.com/api";
+
+function hexToDecimalString(value) {
+  if (value === "latest") return "latest";
+  if (typeof value !== "string" || !/^0x[0-9a-f]+$/i.test(value)) return null;
+  return BigInt(value).toString(10);
+}
+
+async function blockscoutLogs(rpcItem) {
+  const filter = rpcItem?.params?.[0];
+  if (!filter || typeof filter !== "object" || !filter.address || !Array.isArray(filter.topics)) return null;
+
+  const fromBlock = hexToDecimalString(filter.fromBlock ?? "0x0");
+  const toBlock = hexToDecimalString(filter.toBlock ?? "latest");
+  if (fromBlock === null || toBlock === null) return null;
+
+  const url = new URL(BLOCKSCOUT_API);
+  url.searchParams.set("module", "logs");
+  url.searchParams.set("action", "getLogs");
+  url.searchParams.set("fromBlock", fromBlock);
+  url.searchParams.set("toBlock", toBlock);
+  url.searchParams.set("address", filter.address);
+
+  let previousTopic = null;
+  for (let i = 0; i < Math.min(4, filter.topics.length); i++) {
+    const topic = filter.topics[i];
+    if (typeof topic === "string") {
+      url.searchParams.set("topic" + i, topic);
+      if (previousTopic !== null) {
+        url.searchParams.set("topic" + previousTopic + "_" + i + "_opr", "and");
+      }
+      previousTopic = i;
+    }
+  }
+
+  const response = await fetch(url.toString(), {
+    headers: { "accept": "application/json", "user-agent": "rare-friends-the-hatch/1.0" }
+  });
+  if (!response.ok) throw new Error("Blockscout logs HTTP " + response.status);
+
+  const data = await response.json();
+  if (data?.status === "0") {
+    const message = String(data?.message ?? "").toLowerCase();
+    const result = String(data?.result ?? "").toLowerCase();
+    if (message.includes("no") || result.includes("no records") || result.includes("no logs")) return [];
+    throw new Error("Blockscout logs error: " + String(data?.result ?? data?.message ?? "unknown"));
+  }
+  if (!Array.isArray(data?.result)) throw new Error("Blockscout returned invalid logs");
+
+  return data.result.map((log) => ({
+    address: log.address,
+    blockHash: log.blockHash ?? null,
+    blockNumber: log.blockNumber,
+    data: log.data ?? "0x",
+    logIndex: log.logIndex,
+    removed: false,
+    topics: log.topics ?? [],
+    transactionHash: log.transactionHash,
+    transactionIndex: log.transactionIndex ?? "0x0"
+  }));
+}
+
 const RPCS = [
   "https://rpc.mainnet.chain.robinhood.com/",
   "https://robinhood-rpc.publicnode.com/",
@@ -46,6 +109,23 @@ async function proxyRpc(request) {
       { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Invalid JSON-RPC body" } },
       { status: 400, headers: cors(new Headers({ "Cache-Control": "no-store" })) }
     );
+  }
+
+  // FriendSDK discovers owned NFTs with owner-filtered Transfer history.
+  // Public JSON-RPC endpoints often reject that full-range eth_getLogs query,
+  // so answer those reads from the official Robinhood Blockscout indexer.
+  if (!Array.isArray(payload) && payload?.method === "eth_getLogs") {
+    try {
+      const logs = await blockscoutLogs(payload);
+      if (logs !== null) {
+        return Response.json(
+          { jsonrpc: "2.0", id: payload.id ?? null, result: logs },
+          { status: 200, headers: cors(new Headers({ "Cache-Control": "public, max-age=30", "X-RPC-Upstream": "blockscout" })) }
+        );
+      }
+    } catch (error) {
+      // Fall through to ordinary JSON-RPC providers if the indexer is unavailable.
+    }
   }
 
   // Cache identical read calls at the edge. Reads pinned to a concrete block are immutable.
