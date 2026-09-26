@@ -11,7 +11,7 @@ import "./style.css";
 
 type Point = { x: number; y: number };
 type Phase = "intro" | "study" | "patrol" | "won" | "lost";
-type Menu = "report" | "ward" | "settings" | null;
+type Menu = "report" | "ward" | "store" | "inventory" | "settings" | null;
 type Verdict = "hatch" | "garden" | "presence" | "safe";
 
 const VIEW = { width: 960, height: 640 };
@@ -20,6 +20,15 @@ const SPAWN: Point = { x: 885, y: 940 };
 const SPEED = 250;
 const RADIUS = 18;
 const TOTAL_WATCHES = 6;
+
+const NFT_PROFILE = { tokenId: "334137", character: "Mask", scenery: "Garden", floor: "Hatch", generation: 6, seed: 334137 } as const;
+const SUPPLIES = [
+  { key: "ward", name: "Ward", cost: 0.1, description: "Points toward the disturbed zone." },
+  { key: "chalk", name: "Chalk Seal", cost: 0.2, description: "Absorbs one corruption mark." },
+  { key: "bell", name: "Bell", cost: 0.4, description: "Repels the Mimic during a breach." },
+  { key: "fuse", name: "Emergency Fuse", cost: 0.5, description: "Restores a dead safe-zone lamp." },
+  { key: "mirror", name: "Mirror Shard", cost: 0.7, description: "Confirms whether a visible Friend is the Mimic." },
+] as const;
 const STUDY_SECONDS = 12;
 const WATCH_SECONDS = 55;
 const BREACH_SECONDS = 11;
@@ -220,6 +229,9 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
   const [breachSeconds,setBreachSeconds]=useState(BREACH_SECONDS);
   const [breachTriggered,setBreachTriggered]=useState(false);
   const [scare,setScare]=useState(false);
+  const [rfSpent,setRfSpent]=useState(0);
+  const [watchXp,setWatchXp]=useState(0);
+  const [inventory,setInventory]=useState<Record<string,number>>({ward:0,chalk:0,bell:0,fuse:0,mirror:0});
 
   const sequence=useMemo(()=>watchSequence(seedFromFriend(friendId)),[friendId]);
   const verdict=phase==="patrol"?sequence[watch]:"safe";
@@ -322,7 +334,7 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
   function startNight(){
     position.current={...SPAWN};hunter.current={x:900,y:535};
     setPhase("study");setWatch(0);setSeconds(STUDY_SECONDS);setCorruption(0);setScore(0);setInspected(new Set());
-    setMessage("MEMORIZE — Walk the map and learn the three checkpoints.");setWardHint("");setBreach(false);setBreachTriggered(false);
+    setMessage("MEMORIZE — Mask creates the Mimic. Garden creates the map. Hatch is the objective.");setWardHint("");setBreach(false);setBreachTriggered(false);setRfSpent(0);setWatchXp(0);setInventory({ward:0,chalk:0,bell:0,fuse:0,mirror:0});
   }
 
   function startBreach(){
@@ -353,8 +365,8 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
   }
 
   function advanceWatch(){
-    if(watch+1>=TOTAL_WATCHES){setPhase("won");setMessage("06:00 — You kept the garden sealed.");sound.current?.play("reward");return;}
-    const n=watch+1;setWatch(n);setSeconds(Math.max(36,WATCH_SECONDS-n*3));setInspected(new Set());setWardHint("");setBreach(false);setBreachTriggered(false);
+    if(watch+1>=TOTAL_WATCHES){setPhase("won");setMessage("06:00 — Garden Unit 06 remains sealed.");setWatchXp(v=>v+100);sound.current?.play("reward");return;}
+    const n=watch+1;setWatch(n);setSeconds(Math.max(36,WATCH_SECONDS-n*3));setInspected(new Set());setWardHint("");setBreach(false);setBreachTriggered(false);setWatchXp(v=>v+15);
     setMessage(`WATCH ${n+1} — Patrol all three checkpoints.`);
   }
 
@@ -362,7 +374,7 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
     if(phase!=="patrol"||breach)return;
     if(inspected.size<3){setMessage("Finish the patrol first: inspect all three checkpoints.");setMenu(null);return;}
     if(choice===verdict){
-      setScore(s=>s+1);setMessage("Correct report. The garden settles.");sound.current?.play("reward");setMenu(null);window.setTimeout(advanceWatch,700);
+      setScore(s=>s+1);setWatchXp(v=>v+20);setMessage("Correct report. The garden settles.");sound.current?.play("reward");setMenu(null);window.setTimeout(advanceWatch,700);
     }else{setMenu(null);failWatch(`Wrong report. The disturbance was: ${verdict.toUpperCase()}.`);}
   }
 
@@ -404,6 +416,8 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
     {near>=0&&phase==="patrol"&&!breach&&<button className="inspect-btn" onClick={()=>inspectCheckpoint(near)}>INSPECT · {CHECKPOINTS[near].name} <small>E</small></button>}
 
     {phase==="patrol"&&<div className="action-stack">
+      <button disabled={breach} onClick={()=>setMenu("inventory")}>INVENTORY</button>
+      <button disabled={breach} onClick={()=>setMenu("store")}>RF SUPPLIES</button>
       <button disabled={breach} onClick={()=>setMenu("ward")}>WARD · {snapshot?.consumables.toString()??"0"}</button>
       <button className="report-btn" disabled={!canReport} onClick={()=>setMenu("report")}>{breach?"RUN!":canReport?"FILE REPORT":`PATROL ${checked}/3`}</button>
     </div>}
@@ -412,20 +426,21 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
     {scare&&<div className="scare-flash"><div className="scare-face"><i/><i/><b/></div></div>}
 
     {phase==="intro"&&<div className="overlay"><div className="story-card">
-      <span>RARE FRIENDS ARCHIVE // SHIFT 334137</span><h1>THE HATCH</h1>
-      <p>This is not a spot-the-difference screen. You are the night guard. Walk the garden, inspect the three marked locations, survive breaches, then file one report.</p>
+      <span>FRIEND #334137 // TRAIT-BOUND NIGHT</span><h1>THE HATCH</h1>
+      <p><b>Mask</b> creates the Mimic. <b>Garden</b> creates the world. <b>Hatch</b> creates the containment objective. Seed <b>334137</b> determines the event order.</p>
+      <p>This is a survival-horror prototype for all three Vibeathon goals: Character Spotlight, Token Activity, and Economy Potential.</p>
       <div className="rules-box"><b>HOW TO PLAY</b>
         <p>1. Patrol Lamp & Bench, The Hatch, and Pond & Shrine.</p>
         <p>2. Press INSPECT when you reach each marker.</p>
         <p>3. On later watches, the hatch may BREACH. Run to the lamp before the thing catches you.</p>
         <p>4. After the patrol, report HATCH, GARDEN, PRESENCE, or ALL CLEAR.</p>
-        <p>Three corruption marks end the night.</p></div>
+        <p>Three corruption marks trigger final containment.</p><p>RF supplies are simulated: each purchase models 50% burn / 50% Active Friend rewards.</p></div>
       <button onClick={startNight}>START NIGHT WATCH</button><button onClick={()=>setMenu("settings")}>SETTINGS</button>
     </div></div>}
 
     {(phase==="won"||phase==="lost")&&<div className="overlay end"><div className="story-card">
       <span>{phase==="won"?"SHIFT COMPLETE":"CONTAINMENT FAILURE"}</span><h1>{phase==="won"?"SUNRISE":"IT GOT OUT"}</h1><p>{message}</p>
-      <p>{score} of {TOTAL_WATCHES} reports correct.</p><button onClick={startNight}>PLAY ANOTHER SHIFT</button>
+      <p>{score} of {TOTAL_WATCHES} reports correct · Watch XP {watchXp}.</p><div className="ledger"><b>SESSION ECONOMY</b><span>RF spent {rfSpent.toFixed(2)}</span><span>Simulated burn {(rfSpent*0.5).toFixed(2)}</span><span>Active Friend rewards {(rfSpent*0.5).toFixed(2)}</span></div><button onClick={startNight}>PLAY ANOTHER SHIFT</button>
     </div></div>}
 
     {menu==="report"&&<GameMenu title="FILE REPORT" onClose={()=>setMenu(null)}><p>What did your patrol confirm?</p><div className="report-grid">
@@ -434,6 +449,10 @@ export default function TheHatch({ friendId, client, paused }: GameComponentProp
       <button onClick={()=>report("presence")}><b>PRESENCE</b><small>A figure appeared in the garden.</small></button>
       <button onClick={()=>report("safe")}><b>ALL CLEAR</b><small>Nothing changed.</small></button>
     </div></GameMenu>}
+
+    {menu==="store"&&<GameMenu title="RF SUPPLY CABINET" onClose={()=>setMenu(null)}><p>Prototype economy: preparation and protection consume RF; skill earns Watch XP.</p><div className="store-grid">{SUPPLIES.map(item=><button key={item.key} onClick={()=>{setInventory(v=>({...v,[item.key]:(v[item.key]??0)+1}));setRfSpent(v=>v+item.cost);setMessage(item.name+" prepared (simulated RF).");}}><b>{item.name}</b><small>{item.cost.toFixed(2)} RF · {item.description}</small></button>)}</div><p>Spent {rfSpent.toFixed(2)} RF · burn {(rfSpent*0.5).toFixed(2)} · rewards {(rfSpent*0.5).toFixed(2)}</p></GameMenu>}
+
+    {menu==="inventory"&&<GameMenu title="INVENTORY" onClose={()=>setMenu(null)}><div className="store-grid">{SUPPLIES.map(item=><button key={item.key} disabled={!inventory[item.key]} onClick={()=>{if(!inventory[item.key])return;setInventory(v=>({...v,[item.key]:Math.max(0,(v[item.key]??0)-1)}));if(item.key==="bell"&&breach){setBreach(false);setMessage("The Bell drives the Mimic back into the dark.");}else if(item.key==="fuse"){setMessage("The Emergency Fuse stabilizes the lamp circuit.");}else if(item.key==="mirror"){setMessage("Mirror Shard: your reflection is true; the other Friend is not.");}else if(item.key==="chalk"){setMessage("Chalk Seal prepared around the Hatch.");}else{setMessage("Ward: listen for the strongest disturbance.");}}}><b>{item.name} × {inventory[item.key]??0}</b><small>{item.description}</small></button>)}</div></GameMenu>}
 
     {menu==="ward"&&<GameMenu title="WARD CABINET" onClose={()=>setMenu(null)}>
       <p>Ward Charges cost {snapshot?rf(client.definition.price):"0.1 RF"} simulated RF and point toward the suspicious zone.</p>
