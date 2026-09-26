@@ -96,3 +96,13 @@ button,input{font:inherit}
 @keyframes breach-pulse{0%,100%{opacity:.7}50%{opacity:1}}
 @keyframes run-flash{0%,100%{opacity:1}50%{opacity:.35}}
 @keyframes scare-out{0%,35%{opacity:1;transform:scale(1)}55%{opacity:.45;transform:scale(1.04)}100%{opacity:0;transform:scale(1.1)}}
+
+.store-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:10px 0}
+.store-grid button{display:flex;flex-direction:column;gap:4px;text-align:left;border:1px solid #7c8876;background:#0c110c;color:#edf3e8;padding:10px;cursor:pointer}
+.store-grid button:disabled{opacity:.38;cursor:not-allowed}
+.store-grid button:hover:not(:disabled){background:#e1e8dc;color:#080a08}
+.store-grid small{font-size:9px;opacity:.64;font-weight:400}
+.ledger{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:14px 0;padding:10px;background:#101610;border:1px solid #485346}
+.ledger b{grid-column:1/-1;font-size:10px;letter-spacing:.12em}
+.ledger span{font-size:10px;color:#c6d0c1}
+@media(max-width:600px){.store-grid{grid-template-columns:1fr}.ledger{grid-template-columns:1fr}}
