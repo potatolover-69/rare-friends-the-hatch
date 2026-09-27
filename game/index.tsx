@@ -118,6 +118,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const side=useRef<"left"|"right">("right");
   const lastKill=useRef(0);
   const lastSabotage=useRef(0);
+  const agentsRef=useRef<Agent[]>([]);
+  const frameSync=useRef(0);
 
   const [sprites,setSprites]=useState<GenerationSprites|null>(null);
   const [snapshot,setSnapshot]=useState<GameSnapshot|null>(null);
@@ -140,11 +142,20 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const [inventory,setInventory]=useState({ward:0,bell:0});
   const [busy,setBusy]=useState(false);
   const [muted,setMuted]=useState(true);
+  const [evidence,setEvidence]=useState<string[]>(["No evidence yet. Watch who follows victims and who is near sabotaged systems."]);
 
   const aliveAgents=agents.filter(a=>a.alive);
   const bodies=agents.filter(a=>!a.alive);
   const tasksDone=Object.values(tasks).filter(Boolean).length;
   const nearestAlive=aliveAgents.reduce<Agent|null>((best,a)=>!best||dist(pos.current,a.p)<dist(pos.current,best.p)?a:best,null);
+
+  function updateAgents(updater:(xs:Agent[])=>Agent[]){
+    const next=updater(agentsRef.current);
+    agentsRef.current=next;
+    setAgents(next);
+  }
+
+  useEffect(()=>{agentsRef.current=agents;},[agents]);
 
   useEffect(()=>{
     sound.current=createFriendSoundKit({muted:true});
@@ -186,25 +197,43 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
         if(dx||dy)destination.current=null;else if(destination.current){dx=destination.current.x-p.x;dy=destination.current.y-p.y;if(Math.hypot(dx,dy)<7){destination.current=null;dx=0;dy=0;}}
         if(dx||dy){const l=Math.hypot(dx,dy);p.x=clamp(p.x+dx/l*SPEED*dt,120,WORLD.width-120);p.y=clamp(p.y+dy/l*SPEED*dt,120,WORLD.height-120);facing.current=Math.abs(dx)>Math.abs(dy)?(dx<0?"left":"right"):(dy<0?"up":"down");if(facing.current==="left"||facing.current==="right")side.current=facing.current;}
 
-        setAgents(prevAgents=>prevAgents.map((a,i)=>{
+        // Move AI in a ref so React does not tear down the animation loop every frame.
+        const moved=agentsRef.current.map((a,i)=>{
           if(!a.alive)return a;
           let target=a.target;
           if(dist(a.p,target)<28)target=randPoint(Math.floor(now/1000)+i*19+PROFILE.seed);
           const vx=target.x-a.p.x,vy=target.y-a.p.y,d=Math.max(1,Math.hypot(vx,vy));
           return {...a,target,p:{x:clamp(a.p.x+vx/d*a.speed*dt,140,WORLD.width-140),y:clamp(a.p.y+vy/d*a.speed*dt,140,WORLD.height-140)}};
-        }));
+        });
+        agentsRef.current=moved;
+        frameSync.current++;
+        if(frameSync.current%8===0)setAgents([...moved]);
 
-        // AI Mimic behavior in Friend rounds.
+        // Hidden saboteur behavior. It kills isolated teammates and causes crises.
         if(role==="friend"){
-          const mimic=agents.find(a=>a.id==="mimic");
+          const currentAgents=agentsRef.current;
+          const mimic=currentAgents.find(a=>a.id==="mimic");
           if(mimic?.alive){
-            if(now-lastSabotage.current>15000){lastSabotage.current=now;Math.random()>.5?setLights(false):setHatchPanic(true);setMessage(Math.random()>.5?"The lights just died. Someone sabotaged Lamp Court.":"Hatch pressure spike — sabotage detected.");}
-            if(now-lastKill.current>11000){
-              const victims=agents.filter(a=>a.alive&&a.id!=="mimic"&&dist(a.p,mimic.p)<170);
+            if(now-lastSabotage.current>15000){
+              lastSabotage.current=now;
+              const cutLights=Math.random()>.5;
+              if(cutLights)setLights(false);else setHatchPanic(true);
+              setEvidence(prev=>[...prev.slice(-3),cutLights?"The saboteur cut power. Check who was roaming near Lamp Court.":"The Hatch was sabotaged. Check who was near Central Hatch."]);
+              setMessage(cutLights?"The lights just died. Find the saboteur before someone dies.":"Hatch pressure spike — sabotage detected.");
+            }
+            if(now-lastKill.current>10000){
+              const victims=currentAgents.filter(a=>a.alive&&a.id!=="mimic"&&dist(a.p,mimic.p)<175);
               const victim=victims[0];
               if(victim){
-                const witnesses=agents.filter(a=>a.alive&&a.id!==mimic.id&&a.id!==victim.id&&dist(a.p,mimic.p)<260);
-                if(witnesses.length===0){lastKill.current=now;setAgents(xs=>xs.map(a=>a.id===victim.id?{...a,alive:false}:a));setMessage(victim.name+" disappeared in the Garden.");sound.current?.play("impact");}
+                const witnesses=currentAgents.filter(a=>a.alive&&a.id!==mimic.id&&a.id!==victim.id&&dist(a.p,mimic.p)<250);
+                if(witnesses.length===0){
+                  lastKill.current=now;
+                  const next=currentAgents.map(a=>a.id===victim.id?{...a,alive:false}:a);
+                  agentsRef.current=next;setAgents(next);
+                  setEvidence(prev=>[...prev.slice(-3),victim.name+" was last seen near "+mimic.name+"."]);
+                  setMessage(victim.name+" was killed. Find the body and call a meeting.");
+                  sound.current?.play("impact");
+                }
               }
             }
           }
@@ -213,8 +242,9 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
 
       cam.current={x:Math.round(clamp(p.x-VIEW.width/2,0,WORLD.width-VIEW.width)),y:Math.round(clamp(p.y-VIEW.height/2,0,WORLD.height-VIEW.height))};
       ctx.clearRect(0,0,VIEW.width,VIEW.height);ctx.save();ctx.translate(-cam.current.x,-cam.current.y);
-      drawWorld(ctx,now,lights,hatchPanic,bodies);
-      agents.forEach(a=>drawKeeper(ctx,a,now));
+      const renderAgents=agentsRef.current;
+      drawWorld(ctx,now,lights,hatchPanic,renderAgents.filter(a=>!a.alive));
+      renderAgents.forEach(a=>drawKeeper(ctx,a,now));
       ctx.restore();
 
       // Horror lighting first, then canonical Friend so it can never be erased.
@@ -226,16 +256,16 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     };
     raf=requestAnimationFrame(loop);
     return()=>{cancelAnimationFrame(raf);window.removeEventListener("keydown",kd);window.removeEventListener("keyup",ku)};
-  },[sprites,phase,paused,menu,agents,role,lights,hatchPanic,bodies]);
+  },[sprites,phase,paused,menu,role,lights,hatchPanic]);
 
   function start(){
-    const chosen:Role=Math.random()<.22?"mimic":"friend";
+    const chosen:Role="friend";
     setRole(chosen);setPhase("role");setTimer(240);setLights(true);setHatchPanic(false);setTasks({lamp:false,pond:false,hatch:false,shrine:false});setEmergencyLeft(1);setKillCooldown(12);setShiftCooldown(10);setDisguise(null);setVotes({});
     pos.current={...START};
     const bots=BOT_NAMES.map((name,i):Agent=>({id:"bot"+i,name,p:randPoint(i*31+7),alive:true,color:["#526858","#6b5f52","#4b606a","#6a4f55","#596149"][i],target:randPoint(i*47+21),speed:70+i*4,task:ALL_ZONES[i%4],cooldown:0,suspicion:0}));
     if(chosen==="friend"){const culprit=PROFILE.seed%BOT_NAMES.length;bots[culprit]={...bots[culprit],id:"mimic",name:bots[culprit].name};}
-    setAgents(bots);
-    setMessage(chosen==="mimic"?"You are THE MIMIC. Blend in. Sabotage. Replace them.":"You are a FRIEND. Finish tasks, watch behavior, and expose the Mimic.");
+    agentsRef.current=bots;setAgents(bots);setEvidence(["One of these five Keepers is the saboteur. Watch their routes, find bodies, and call meetings."]);
+    setMessage("You are a FRIEND. Complete containment tasks, but your real goal is to identify and eject the hidden saboteur.");
     setTimeout(()=>setPhase("play"),2200);
   }
 
@@ -245,7 +275,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       const zone=ALL_ZONES.find(z=>near(pos.current,ZONES[z].p,125));
       if(zone&&!tasks[zone]){
         setTasks(v=>({...v,[zone]:true}));setMessage(ZONES[zone].name+" secured. "+(tasksDone+1)+"/4 tasks complete.");sound.current?.play("reward");
-        if(tasksDone+1>=4)finish("won","All containment tasks are complete. The Garden survives until sunrise.");
+        if(tasksDone+1>=4)setMessage("Containment tasks complete. Now identify and eject the saboteur before sunrise.");
         return;
       }
       if(!lights&&near(pos.current,ZONES.lamp.p,130)){setLights(true);setMessage("Lamp Court restored.");return;}
@@ -253,7 +283,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       reportBody();
     }else{
       const target=nearestAlive;
-      if(target&&near(pos.current,target.p,90)&&killCooldown===0){setAgents(xs=>xs.map(a=>a.id===target.id?{...a,alive:false}:a));setKillCooldown(18);setMessage("No one saw "+target.name+" disappear.");sound.current?.play("impact");checkMimicWin();return;}
+      if(target&&near(pos.current,target.p,90)&&killCooldown===0){updateAgents(xs=>xs.map(a=>a.id===target.id?{...a,alive:false}:a));setKillCooldown(18);setMessage("No one saw "+target.name+" disappear.");sound.current?.play("impact");checkMimicWin();return;}
     }
   }
 
@@ -269,23 +299,24 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     setEmergencyLeft(0);openMeeting("Emergency bell called at Lamp Court.");
   }
 
-  function openMeeting(reason:string){setMeetingReason(reason);setPhase("meeting");setVotes({});sound.current?.play("select");}
+  function openMeeting(reason:string){setMeetingReason(reason);setPhase("meeting");setVotes({});setMessage("Discuss the evidence, then vote for the saboteur.");sound.current?.play("select");}
 
   function vote(id:string){
-    const candidates=agents.filter(a=>a.alive);
+    const candidates=agentsRef.current.filter(a=>a.alive);
     const tally:Record<string,number>={[id]:1};
     for(const voter of candidates){
       if(Math.random()<.18)continue;
       const pool=candidates.filter(c=>c.id!==voter.id);
-      const pick=role==="friend"&&voter.suspicion>2?(agents.find(a=>a.id==="mimic")||pool[0]):pool[Math.floor(Math.random()*pool.length)];
+      const culprit=agentsRef.current.find(a=>a.id==="mimic");
+      const pick=(voter.id!=="mimic"&&Math.random()<.45&&culprit)?culprit:pool[Math.floor(Math.random()*pool.length)];
       if(pick)tally[pick.id]=(tally[pick.id]||0)+1;
     }
     setVotes(tally);
     const top=Object.entries(tally).sort((a,b)=>b[1]-a[1])[0];
-    const ejected=top?agents.find(a=>a.id===top[0]):null;
+    const ejected=top?agentsRef.current.find(a=>a.id===top[0]):null;
     setTimeout(()=>{
       if(!ejected){setPhase("play");return;}
-      setAgents(xs=>xs.map(a=>a.id===ejected.id?{...a,alive:false}:a));
+      updateAgents(xs=>xs.map(a=>a.id===ejected.id?{...a,alive:false}:a));
       if(role==="friend"&&ejected.id==="mimic"){finish("won",ejected.name+" was the Mimic. The remaining Keepers seal the Hatch.");return;}
       if(role==="mimic"&&ejected.id==="mimic"){finish("lost","The Keepers identified you before the Hatch opened.");return;}
       setMessage(ejected.name+" was expelled. The night continues.");
@@ -308,7 +339,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
 
   function checkMimicWin(){
     setTimeout(()=>{
-      const alive=agents.filter(a=>a.alive).length;
+      const alive=agentsRef.current.filter(a=>a.alive).length;
       if(role==="mimic"&&alive<=2)finish("won","Only one Keeper remains. The Mimic owns the Garden.");
       if(role==="friend"&&alive<=2)finish("lost","The Mimic outnumbers the remaining Keepers.");
     },50);
@@ -331,7 +362,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     }}/>
 
     {phase==="play"&&<>
-      <div className="hud mission"><span>{roleLabel} // {clock}</span><b>{role==="friend"?"KEEP THE HATCH SEALED":"BECOME ONE OF THEM"}</b><small>{role==="friend"?tasksDone+"/4 containment tasks complete":aliveAgents.length+" Keepers remain"}</small></div>
+      <div className="hud mission"><span>{roleLabel} // {clock}</span><b>{role==="friend"?"KEEP THE HATCH SEALED":"BECOME ONE OF THEM"}</b><small>{role==="friend"?tasksDone+"/4 tasks · identify the saboteur":aliveAgents.length+" Keepers remain"}</small></div>
       <div className="hud statusbox"><b>{lights?"LIGHTS ONLINE":"BLACKOUT"}</b><span>{hatchPanic?"HATCH SABOTAGED":"Containment stable"}</span></div>
       {role==="friend"&&<div className="task-list">{ALL_ZONES.map(z=><span key={z} className={tasks[z]?"done":""}>{tasks[z]?"✓":"□"} {ZONES[z].name}</span>)}</div>}
       <div className="bottom-actions">
@@ -344,11 +375,11 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       <div className="message">{message}</div>
     </>}
 
-    {phase==="title"&&<div className="overlay"><div className="title-card"><span>RARE FRIENDS SOCIAL HORROR</span><h1>THE HATCH</h1><p>One Garden. Six Keepers. One of them is not what it claims to be.</p><div className="pitch"><b>MASK</b><span>The Mimic can copy identities.</span><b>GARDEN</b><span>A realistic night map built around your NFT.</span><b>HATCH</b><span>Keep it sealed until sunrise.</span></div><button onClick={start}>START PRACTICE NIGHT</button><button onClick={()=>setMenu("settings")}>SETTINGS</button><small>WASD / arrows · E use · R report · click/tap to move</small></div></div>}
+    {phase==="title"&&<div className="overlay"><div className="title-card"><span>RARE FRIENDS SOCIAL HORROR</span><h1>THE HATCH</h1><p>One of the Keepers is a hidden saboteur. It will kill the team unless you identify it in a meeting.</p><div className="pitch"><b>MASK</b><span>The Mimic can copy identities.</span><b>GARDEN</b><span>A realistic night map built around your NFT.</span><b>HATCH</b><span>Keep it sealed until sunrise.</span></div><button onClick={start}>START DEDUCTION NIGHT</button><button onClick={()=>setMenu("settings")}>SETTINGS</button><small>WASD / arrows · E use · R report · click/tap to move</small></div></div>}
 
     {phase==="role"&&<div className={"overlay role-card "+role}><div><span>YOUR ROLE</span><h1>{role==="friend"?"FRIEND":"THE MIMIC"}</h1><p>{message}</p></div></div>}
 
-    {phase==="meeting"&&<div className="overlay meeting"><div className="meeting-card"><span>GARDEN MEETING</span><h2>{meetingReason}</h2><p>Who doesn't belong here?</p><div className="vote-grid">{agents.filter(a=>a.alive).map(a=><button key={a.id} onClick={()=>vote(a.id)}><b>{a.name}</b><small>{votes[a.id]?votes[a.id]+" votes":"VOTE"}</small></button>)}</div><button className="skip" onClick={()=>setPhase("play")}>SKIP VOTE</button></div></div>}
+    {phase==="meeting"&&<div className="overlay meeting"><div className="meeting-card"><span>GARDEN MEETING</span><h2>{meetingReason}</h2><p>Who doesn't belong here?</p><div className="evidence"><b>EVIDENCE</b>{evidence.map((e,i)=><span key={i}>• {e}</span>)}</div><div className="vote-grid">{agents.filter(a=>a.alive).map(a=><button key={a.id} onClick={()=>vote(a.id)}><b>{a.name}</b><small>{votes[a.id]?votes[a.id]+" votes":"VOTE"}</small></button>)}</div><button className="skip" onClick={()=>setPhase("play")}>SKIP VOTE</button></div></div>}
 
     {(phase==="won"||phase==="lost")&&<div className="overlay"><div className={"end-card "+phase}><span>{phase==="won"?"NIGHT SURVIVED":"CONTAINMENT FAILED"}</span><h1>{phase==="won"?"SUNRISE":"REPLACED"}</h1><p>{message}</p><div className="ledger"><span>Role {roleLabel}</span><span>Tasks {tasksDone}/4</span><span>RF spent {rfSpent.toFixed(2)}</span><span>Friend #334137</span></div><button onClick={start}>PLAY AGAIN</button></div></div>}
 
