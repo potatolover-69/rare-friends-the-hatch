@@ -24,3 +24,21 @@ body[data-hatch-mood="sunrise"]{background:radial-gradient(circle at 50% 8%,#6f6
 .meeting-card h2{font:800 17px ui-monospace}.evidence{display:flex;flex-direction:column;gap:5px;text-align:left;margin:12px 0;padding:10px;background:#0b100c;border:1px solid #354036}.evidence b{font:800 9px ui-monospace;letter-spacing:.12em}.evidence span{font:600 9px ui-monospace;color:#b6c0b2;line-height:1.35}.vote-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0}.vote-grid button{display:flex;flex-direction:column;gap:3px}.vote-grid small{font:700 8px ui-monospace;opacity:.6}.skip{opacity:.7}
 .ledger{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:16px 0;padding:11px;background:#0e130f;border:1px solid #394338}.ledger span{font:700 9px ui-monospace;color:#aab4a7}.item-menu{display:flex;flex-direction:column;gap:10px}.item-menu button{display:flex;flex-direction:column;gap:3px}.item-menu small{opacity:.65}
 @media(max-width:700px){.mission{left:7px;top:7px;width:230px}.statusbox{right:7px;top:7px}.hud b{font-size:10px}.task-list{left:7px;top:80px}.bottom-actions{bottom:60px;gap:3px}.bottom-actions button{padding:6px 6px;font-size:8px}.message{bottom:96px;width:70%;font-size:8px}.mimic-actions{right:7px;top:82px;width:125px}.vote-grid{grid-template-columns:1fr 1fr}.title-card,.meeting-card,.end-card{padding:19px}.title-card h1{font-size:30px}}
+
+
+/* Graphics pass: cinematic depth without touching the canonical NFT sprite. */
+.deduction-game:before{content:"";position:absolute;inset:-8%;z-index:7;pointer-events:none;background:
+radial-gradient(circle at 18% 25%,rgba(174,194,176,.05),transparent 28%),
+radial-gradient(circle at 76% 68%,rgba(160,181,165,.04),transparent 31%),
+linear-gradient(115deg,transparent 0 38%,rgba(210,219,210,.018) 49%,transparent 61%);
+filter:blur(18px);animation:mistDrift 12s ease-in-out infinite alternate}
+.game-canvas{filter:saturate(.82) contrast(1.08) brightness(.94)}
+.blackout .game-canvas{filter:saturate(.65) contrast(1.18) brightness(.72)}
+.breach .game-canvas{filter:saturate(.72) contrast(1.18) brightness(.86)}
+.hud,.task-list,.message,.bottom-actions button,.mimic-actions button{backdrop-filter:blur(5px)}
+.hud,.task-list{box-shadow:0 12px 34px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.025)}
+.bottom-actions button,.mimic-actions button{border-color:rgba(220,228,217,.34);background:linear-gradient(180deg,rgba(18,24,19,.95),rgba(5,9,6,.94))}
+.meeting-card,.title-card,.end-card{background:linear-gradient(180deg,rgba(12,17,13,.96),rgba(3,6,4,.96));box-shadow:0 34px 140px rgba(0,0,0,.92),inset 0 1px rgba(255,255,255,.035)}
+.vote-grid button{background:linear-gradient(180deg,#151b16,#080b09);border-color:#384338}
+.vote-grid button:hover{box-shadow:0 0 26px rgba(187,201,183,.10)}
+@keyframes mistDrift{0%{transform:translate3d(-2%,1%,0) scale(1.02);opacity:.7}100%{transform:translate3d(3%,-2%,0) scale(1.08);opacity:1}}
