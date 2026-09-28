@@ -1,5 +1,7 @@
 # Rare Friends: The Hatch
 
+**Play the GitHub Pages preview:** https://potatolover-69.github.io/rare-friends-the-hatch/
+
 **Rare Friends Vibeathon 2026 · Character Spotlight · Token Activity · Economy Potential**
 
 A social-deduction horror game built with FriendSDK. Your selected owned Rare Friend is the playable character in a haunted Garden where five other Friend avatars perform containment chores. One of them is secretly the Mimic.
