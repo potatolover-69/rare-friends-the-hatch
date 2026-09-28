@@ -5,7 +5,7 @@
   "type": "module",
   "engines": { "node": ">=22.0.0" },
   "scripts": {
-    "build:sdk": "cd node_modules/@rarefriends/friendsdk && npm install && npm run build",
+    "build:sdk": "cd node_modules/@rarefriends/friendsdk && npm install && cd ../../.. && node scripts/patch-friendsdk.mjs && cd node_modules/@rarefriends/friendsdk && npm run build",
     "build:game": "node node_modules/@rarefriends/friendsdk/scripts/dev-game.mjs build game --outdir dist",
     "build": "npm run build:sdk && npm run build:game",
     "check": "npm run build:sdk && node node_modules/@rarefriends/friendsdk/scripts/dev-game.mjs check game",
@@ -14,7 +14,7 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "@rarefriends/friendsdk": "github:spokesz/friendsdk#main",
+    "@rarefriends/friendsdk": "github:spokesz/friendsdk#762d6f58a73ace723f7f82dc1a61bfa036c21edc",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },
