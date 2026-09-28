@@ -1,37 +1,47 @@
 # Rare Friends: The Hatch
 
-**Rare Friends Vibeathon 2026 · Character Spotlight**
+**Rare Friends Vibeathon 2026 · Character Spotlight · Token Activity · Economy Potential**
 
-A psychological anomaly-survival horror game built with **FriendSDK v0.1.2**.
+A social-deduction horror game built with FriendSDK. Your selected owned Rare Friend is the playable character in a haunted Garden where five other Friend avatars perform containment chores. One of them is secretly the Mimic.
 
-Your verified Rare Friend keeps watch over a familiar garden until sunrise. Each watch may contain a subtle anomaly: an object moves, disappears, duplicates, distorts, the hatch opens, or an unwanted presence appears. Report correctly before the timer expires. Three mistakes trigger containment failure.
+## Character Spotlight
 
-## Why the NFT matters
-
-- The selected owned Generations NFT is the playable character through FriendSDK.
-- The Friend's token identity seeds the anomaly order, so different Friends receive different nights.
-- The game's original concept was inspired by Friend #334137: Gen 6 · Mask · Garden · Hatch.
-- Canonical Friend artwork is rendered by FriendSDK and is not replaced or recolored.
+- The selected owned Friend is rendered from FriendSDK canonical artwork and is never recolored or replaced.
+- NPC Keepers attempt to load canonical Friend artwork from other token IDs. These NPC appearances do not imply ownership or eligibility.
+- Friend #334137 (Gen 6 · Mask · Garden · Hatch) drives the game's identity: Mask becomes the Mimic mechanic, Garden becomes the map, and Hatch becomes the shared objective.
 
 ## Core loop
 
-Study the garden → patrol → identify changes → report the anomaly or declare the garden safe → survive eight watches.
+Move through the Garden → perform containment chores → observe other Keepers doing their own chores → survive sabotage → discover/report bodies → compare every Keeper's statement during meetings → vote out the Mimic.
 
-As corruption rises, visual interference and a hostile presence begin to manifest.
+The Mimic deliberately behaves like a normal worker most of the time, takes occasional detours, sabotages systems, kills only when isolated, then lies during meetings. Evidence is circumstantial rather than a direct reveal.
 
-## Simulated RF economy
+## Lighting
 
-Ward Charges cost **0.1 simulated RF**. A Ward never pays a reward; consuming one only tells the player whether the current watch contains an anomaly. This is a deterministic utility sink rather than a gambling mechanic.
+The Garden now uses global moonlight and local environmental lamps instead of a player-centered darkness bubble. Blackouts dim the whole level but keep navigation readable. A purchased flashlight adds an optional directional beam.
 
-No live RF transactions occur in the Vibeathon preview.
+## Prototype RF economy
+
+The Night Market includes optional utility sinks:
+
+- Flashlight — 0.10 RF
+- UV Scanner — 0.20 RF
+- Emergency Flare — 0.30 RF
+- Ward — 0.10 RF
+
+Purchases exercise FriendSDK buy/play/settle activity. The intended burn/sink behavior and the displayed **+0.40 RF win reward are simulated MVP economy concepts**, not a claim that the live Rare Friends ecosystem currently burns or distributes RF this way.
+
+The base deduction game remains playable without purchases.
 
 ## Controls
 
-- WASD / Arrow keys — walk
+- WASD / Arrow keys — move
 - Click/tap — move
-- REPORT — open the anomaly report
-- WARD — buy/use simulated Ward Charges
-- Settings — mute and reduced-motion support
+- E — use / task interaction
+- R — report body
+- F — toggle purchased flashlight
+- Meeting — call one emergency meeting
+- Shop / Gear — open the RF Night Market
 
 ## Development
 
@@ -52,13 +62,8 @@ The static FriendSDK preview is emitted to `dist/`.
 
 ## Deployment
 
-The repository includes `wrangler.jsonc` for Cloudflare. Connected Cloudflare builds can use:
-
-- Deploy command: `npx wrangler deploy`
-- Root directory: `/`
-
-Wrangler runs `npm run build` before deploying the generated `dist/` assets.
+Cloudflare configuration is included in `wrangler.jsonc`. Connected deployments build from `main`.
 
 ## Status
 
-Vibeathon prototype under active development.
+Vibeathon prototype under active development. Current gameplay is a single-player practice lobby with AI Keepers; a real multiplayer release would need an authoritative room/network backend.
