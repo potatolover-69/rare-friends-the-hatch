@@ -51,7 +51,7 @@ function drawNpcFriend(ctx:CanvasRenderingContext2D,sprites:GenerationSprites,a:
   const dx=a.target.x-a.p.x,dy=a.target.y-a.p.y;
   const facing:SpriteFacing=Math.abs(dx)>Math.abs(dy)?(dx<0?"left":"right"):(dy<0?"up":"down");
   const side=facing==="left"?"left":"right";
-  const rows=spriteFrame(sprites,facing,true,Math.floor(t/120)%8,side).frame.rows;
+  const rows=spriteFrame(sprites,facing,a.workUntil<=t,Math.floor(t/120)%8,side).frame.rows;
   const scale=4,left=Math.round(a.p.x)-32,top=Math.round(a.p.y)-62;
   ctx.save();ctx.imageSmoothingEnabled=false;
   const shadow=ctx.createRadialGradient(a.p.x,a.p.y+4,2,a.p.x,a.p.y+4,28);shadow.addColorStop(0,"rgba(0,0,0,.55)");shadow.addColorStop(1,"rgba(0,0,0,0)");
@@ -62,6 +62,7 @@ function drawNpcFriend(ctx:CanvasRenderingContext2D,sprites:GenerationSprites,a:
   rows.forEach((row,y)=>[...row].forEach((px,x)=>{if(px==="#")ctx.fillRect(left+x*scale,top+y*scale,scale,scale)}));
   ctx.fillStyle="#e8eee5";ctx.font="700 9px ui-monospace";ctx.textAlign="center";ctx.shadowColor="#000";ctx.shadowBlur=4;
   ctx.fillText(a.name+" · #"+a.tokenId.toString(),a.p.x,a.p.y+27);
+  if(a.workUntil>t){ctx.fillStyle="rgba(232,239,228,.72)";ctx.font="700 8px ui-monospace";ctx.fillText("WORKING",a.p.x,a.p.y+39);}
   ctx.restore();
 }
 
@@ -501,7 +502,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     pos.current={...START};
     const bots=BOT_NAMES.map((name,i):Agent=>({id:"bot"+i,name,p:randPoint(i*31+7),alive:true,color:["#526858","#6b5f52","#4b606a","#6a4f55","#596149"][i],target:ZONES[ALL_ZONES[i%4]].p,speed:74+i*3,task:ALL_ZONES[i%4],cooldown:0,suspicion:0,tokenId:NPC_TOKEN_IDS[i],choreIndex:i%4,workUntil:0,lastZone:ALL_ZONES[i%4],lastAction:"heading to "+ZONES[ALL_ZONES[i%4]].name}));
     if(chosen==="friend"){const culprit=PROFILE.seed%BOT_NAMES.length;bots[culprit]={...bots[culprit],id:"mimic",name:bots[culprit].name};}
-    agentsRef.current=bots;setAgents(bots);setEvidence(["One of these five on-chain Friend avatars is the saboteur. Watch their routes, chores, and contradictions."]);setTestimony([]);setRfEarned(0);
+    agentsRef.current=bots;setAgents(bots);setEvidence(["One of these five Friend Keepers is the saboteur. Watch their routes, chores, and contradictions."]);setTestimony([]);setRfEarned(0);
     setMessage("You are a FRIEND. Complete containment tasks, but your real goal is to identify and eject the hidden saboteur.");
     setTimeout(()=>setPhase("play"),2200);
   }
@@ -619,6 +620,18 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     }catch(e){setMessage(e instanceof Error?e.message:"RF action failed.");}finally{setBusy(false);}
   }
 
+  function useFlare(){
+    if(inventory.flare<=0||phase!=="play")return;
+    setInventory(v=>({...v,flare:v.flare-1}));setLights(true);setMessage("Emergency Flare ignited — the whole Garden is lit again.");
+    sound.current?.play("reward");
+  }
+
+  function useWard(){
+    if(inventory.ward<=0||phase!=="play")return;
+    setInventory(v=>({...v,ward:v.ward-1}));setHatchPanic(false);setMessage("Ward consumed — Hatch sabotage stabilized immediately.");
+    sound.current?.play("reward");
+  }
+
   const minute=Math.floor((240-timer)/40);const clock=["12:00","1:00","2:00","3:00","4:00","5:00","6:00"][Math.min(6,minute)];
   const roleLabel=role==="friend"?"FRIEND":"MIMIC";
 
@@ -635,7 +648,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
         <button onClick={interact}>{role==="mimic"?"KILL / USE":"USE"} <small>E</small></button>
         <button onClick={reportBody}>REPORT <small>R</small></button>
         <button disabled={emergencyLeft<=0} onClick={emergency}>MEETING {emergencyLeft}</button>
-        <button onClick={()=>setMenu("inventory")}>SHOP / GEAR</button>{inventory.flashlight>0&&<button onClick={()=>setFlashlightOn(v=>!v)}>FLASHLIGHT {flashlightOn?"ON":"OFF"} <small>F</small></button>}
+        <button onClick={()=>setMenu("inventory")}>SHOP / GEAR</button>{inventory.flashlight>0&&<button onClick={()=>setFlashlightOn(v=>!v)}>FLASHLIGHT {flashlightOn?"ON":"OFF"} <small>F</small></button>}{inventory.flare>0&&<button onClick={useFlare}>USE FLARE ×{inventory.flare}</button>}{inventory.ward>0&&<button onClick={useWard}>USE WARD ×{inventory.ward}</button>}
       </div>
       {role==="mimic"&&<div className="mimic-actions"><button disabled={shiftCooldown>0} onClick={()=>sabotage("lights")}>CUT LIGHTS {shiftCooldown||""}</button><button disabled={shiftCooldown>0} onClick={()=>sabotage("hatch")}>HATCH SABOTAGE</button><button disabled={shiftCooldown>0||!nearestAlive} onClick={shapeshift}>MASK SHIFT</button><span>KILL CD {killCooldown}s {disguise?"· AS "+disguise:""}</span></div>}
       <div className="message">{message}</div>
@@ -653,8 +666,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       <p className="economy-note">MVP economy: purchases exercise FriendSDK token activity. Burn/sink intent and win rewards are simulated for the Vibeathon prototype.</p>
       <button disabled={busy} onClick={()=>void buyItem("flashlight",1)}><b>Flashlight · 0.10 RF</b><small>Toggle with F. Adds a warm directional beam during blackouts.</small></button>
       <button disabled={busy} onClick={()=>void buyItem("uv",2)}><b>UV Scanner · 0.20 RF</b><small>Adds a system inconsistency clue during meetings.</small></button>
-      <button disabled={busy} onClick={()=>void buyItem("flare",3)}><b>Emergency Flare · 0.30 RF</b><small>Prototype utility slot for future group-light rescue.</small></button>
-      <button disabled={busy} onClick={()=>void buyItem("ward",1)}><b>Ward · 0.10 RF</b><small>Prototype containment utility.</small></button>
+      <button disabled={busy} onClick={()=>void buyItem("flare",3)}><b>Emergency Flare · 0.30 RF</b><small>Consumes one flare to restore full Garden lighting immediately.</small></button>
+      <button disabled={busy} onClick={()=>void buyItem("ward",1)}><b>Ward · 0.10 RF</b><small>Consumes one Ward to cancel active Hatch sabotage immediately.</small></button>
       <div className="inventory-line"><span>Flashlight × {inventory.flashlight}</span><span>UV × {inventory.uv}</span><span>Flare × {inventory.flare}</span><span>Ward × {inventory.ward}</span></div>
     </div></GameMenu>}
     {menu==="settings"&&<GameMenu title="SETTINGS" onClose={()=>setMenu(null)}><button onClick={()=>{const n=!muted;setMuted(n);sound.current?.setMuted(n);}}>{muted?"SOUND: OFF":"SOUND: ON"}</button><p>This build is a playable social-deduction practice lobby with AI Keepers. Real online lobbies need a multiplayer backend.</p></GameMenu>}
