@@ -42,6 +42,8 @@ const START={x:1500,y:1870};
 const SPEED=245;
 const PROFILE={token:"334137",character:"Mask",scenery:"Garden",floor:"Hatch",generation:6,seed:334137};
 const MAIN_MUSIC_URL="https://raw.githubusercontent.com/potatolover-69/rare-friends-the-hatch/main/game/assets/audio/Before_the_Breath.mp3";
+const FLASHLIGHT_SWITCH_URL="https://raw.githubusercontent.com/potatolover-69/rare-friends-the-hatch/main/game/assets/audio/sfx_flashlight_switch.mp3";
+const STREETLIGHT_FLICKER_URL="https://raw.githubusercontent.com/potatolover-69/rare-friends-the-hatch/main/game/assets/audio/sfx_streetlight_flicker.mp3";
 
 const ZONES:Record<ZoneKey,{name:string;p:Point;hint:string}>={
   lamp:{name:"Lamp Court",p:{x:620,y:920},hint:"Reconnect the lamp circuit and restore the street lights."},
@@ -130,6 +132,7 @@ type HatchAudio={
   set:(settings:GameSettings,muted:boolean)=>void;
   cue:(kind:"meeting"|"danger"|"task"|"vote"|"win"|"lose")=>void;
   siren:()=>void;
+  sample:(kind:"flashlight"|"streetlightFlicker")=>void;
   dispose:()=>void;
 };
 
@@ -146,6 +149,16 @@ function createHatchAudio():HatchAudio|null{
   let trackSource:MediaElementAudioSourceNode|null=null;
   try{trackSource=context.createMediaElementSource(track);trackSource.connect(music);}catch{}
   track.addEventListener("error",()=>track.pause());
+
+  const sampleEls={
+    flashlight:new Audio(FLASHLIGHT_SWITCH_URL),
+    streetlightFlicker:new Audio(STREETLIGHT_FLICKER_URL),
+  };
+  const sampleSources:MediaElementAudioSourceNode[]=[];
+  Object.values(sampleEls).forEach(el=>{
+    el.preload="auto";el.crossOrigin="anonymous";
+    try{const source=context.createMediaElementSource(el);source.connect(sfx);sampleSources.push(source);}catch{}
+  });
 
   const drone=context.createOscillator(),droneFilter=context.createBiquadFilter(),droneGain=context.createGain();
   drone.type="sine";drone.frequency.value=55;droneFilter.type="lowpass";droneFilter.frequency.value=180;droneGain.gain.value=.025;
@@ -178,7 +191,11 @@ function createHatchAudio():HatchAudio|null{
       osc.connect(gain).connect(sfx);osc.start(start);osc.stop(start+.17);
     }
   };
-  return {resume:async()=>{if(context.state==="suspended")await context.resume();if(track.paused){try{await track.play();}catch{}}},set,cue,siren,dispose:()=>{try{track.pause();track.src="";trackSource?.disconnect();drone.stop();tone.stop();void context.close();}catch{}}};
+  const sample=(kind:"flashlight"|"streetlightFlicker")=>{
+    if(context.state!=="running")return;
+    const el=sampleEls[kind];el.pause();el.currentTime=0;void el.play().catch(()=>{});
+  };
+  return {resume:async()=>{if(context.state==="suspended")await context.resume();if(track.paused){try{await track.play();}catch{}}},set,cue,siren,sample,dispose:()=>{try{track.pause();track.src="";trackSource?.disconnect();Object.values(sampleEls).forEach(el=>{el.pause();el.src="";});sampleSources.forEach(node=>node.disconnect());drone.stop();tone.stop();void context.close();}catch{}}};
 }
 
 function FriendPortrait({sprites,name}:{sprites?:GenerationSprites;name:string}){
@@ -841,7 +858,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   useEffect(()=>{
     const node=canvas.current,ctx=node?.getContext("2d");if(!node||!ctx||!sprites)return;
     let raf=0,prev=0,frameNo=0;
-    const kd=(e:KeyboardEvent)=>{const k=e.key.toLowerCase();if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"].includes(k))keys.current.add(k);if(k==="e")interact();if(k==="r")reportBody();if(k==="f"&&inventory.flashlight>0&&flashlightBattery>0)setFlashlightOn(v=>!v);if(k==="g"&&phase==="play")setMenu("inventory");if(k==="m"&&phase==="play")setMenu(v=>v==="map"?null:"map");if(k==="escape")setMenu(v=>v?null:"settings");};
+    const kd=(e:KeyboardEvent)=>{const k=e.key.toLowerCase();if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"].includes(k))keys.current.add(k);if(k==="e")interact();if(k==="r")reportBody();if(k==="f")toggleFlashlight();if(k==="g"&&phase==="play")setMenu("inventory");if(k==="m"&&phase==="play")setMenu(v=>v==="map"?null:"map");if(k==="escape")setMenu(v=>v?null:"settings");};
     const ku=(e:KeyboardEvent)=>keys.current.delete(e.key.toLowerCase());
     window.addEventListener("keydown",kd);window.addEventListener("keyup",ku);
 
@@ -1087,7 +1104,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     sabotageHistoryRef.current=[...sabotageHistoryRef.current.slice(-1),zone];
     if(zone==="lamp"){
       setLightsFlickering(true);setMessage("GRID OVERLOAD — street lights are flickering. Repair Lamp Court before the relay explodes.");
-      window.setTimeout(()=>{if(sabotageRef.current?.zone==="lamp"){setLightsFlickering(false);setLights(false);setMessage("BLACKOUT — visibility is nearly zero. Repair Lamp Court or use a flashlight.");}},1500);
+      void hatchAudio.current?.resume().then(()=>hatchAudio.current?.sample("streetlightFlicker"));
+      window.setTimeout(()=>{if(sabotageRef.current?.zone==="lamp"){setLightsFlickering(false);setLights(false);setMessage("BLACKOUT — visibility is nearly zero. Repair Lamp Court or use a flashlight.");}},2800);
     }else if(zone==="shed"){
       setLightsFlickering(true);setMessage("GENERATOR OVERLOAD — isolate the Tool Shed circuit before it blows.");
       window.setTimeout(()=>{if(sabotageRef.current?.zone==="shed")setLightsFlickering(false);},1100);
@@ -1100,6 +1118,12 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     setRoundNotes(prev=>[...prev.slice(-8),ZONES[zone].name+" sabotaged — "+meta.seconds+" seconds to repair."]);
     if(settings.screenShake&&!settings.reducedMotion)shakeUntil.current=performance.now()+500;
     sound.current?.play("impact");hatchAudio.current?.cue("danger");
+  }
+
+  function toggleFlashlight(){
+    if(inventory.flashlight<=0||flashlightBattery<=0)return;
+    void hatchAudio.current?.resume().then(()=>hatchAudio.current?.sample("flashlight"));
+    setFlashlightOn(v=>!v);
   }
 
   function interact(){
@@ -1372,7 +1396,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
         <button className={contextAction!=="INTERACT"?"context-ready":""} onClick={interact}>{role==="mimic"?"KILL / USE":contextAction} <small>E</small></button>
         <button onClick={reportBody}>REPORT <small>R</small></button>
         <button disabled={emergencyLeft<=0} onClick={emergency}>MEETING {emergencyLeft}</button>
-        <button onClick={()=>setMenu("inventory")}>SHOP <small>G</small></button><button onClick={()=>setMenu("map")}>MAP <small>M</small></button>{inventory.flashlight>0&&<button disabled={flashlightBattery<=0} onClick={()=>setFlashlightOn(v=>!v)}>LIGHT {flashlightOn?"ON":"OFF"} <small>F</small></button>}{inventory.battery>0&&<button onClick={useBattery}>BATTERY ×{inventory.battery}</button>}{inventory.flare>0&&<button onClick={useFlare}>FLARE ×{inventory.flare}</button>}{inventory.ward>0&&<button onClick={useWard}>WARD ×{inventory.ward}</button>}
+        <button onClick={()=>setMenu("inventory")}>SHOP <small>G</small></button><button onClick={()=>setMenu("map")}>MAP <small>M</small></button>{inventory.flashlight>0&&<button disabled={flashlightBattery<=0} onClick={toggleFlashlight}>LIGHT {flashlightOn?"ON":"OFF"} <small>F</small></button>}{inventory.battery>0&&<button onClick={useBattery}>BATTERY ×{inventory.battery}</button>}{inventory.flare>0&&<button onClick={useFlare}>FLARE ×{inventory.flare}</button>}{inventory.ward>0&&<button onClick={useWard}>WARD ×{inventory.ward}</button>}
       </div>
       {role==="mimic"&&<div className="mimic-actions"><button disabled={shiftCooldown>0} onClick={()=>sabotage("lights")}>CUT LIGHTS {shiftCooldown||""}</button><button disabled={shiftCooldown>0} onClick={()=>sabotage("hatch")}>HATCH SABOTAGE</button><button disabled={shiftCooldown>0||!nearestAlive} onClick={shapeshift}>MASK SHIFT</button><span>KILL CD {killCooldown}s {disguise?"· AS "+disguise:""}</span></div>}
       {toastOpen&&<div className="message toast-message">{message}</div>}
