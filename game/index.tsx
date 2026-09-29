@@ -314,39 +314,66 @@ function drawBush(ctx:CanvasRenderingContext2D,p:Point,seed:number){
   ctx.restore();
 }
 
-function drawLampCourt(ctx:CanvasRenderingContext2D,lights:boolean,t:number){
-  const p=ZONES.lamp.p;
+function drawStreetLamp(ctx:CanvasRenderingContext2D,p:Point,lights:boolean,flickering:boolean,t:number,seed:number){
   ctx.save();
-  if(lights){
-    const flicker=.92+Math.sin(t/170)*.035+Math.sin(t/73)*.018;
-    const glow=ctx.createRadialGradient(p.x,p.y-92,12,p.x,p.y-92,300);
-    glow.addColorStop(0,"rgba(255,239,184,"+(.46*flicker)+")");
-    glow.addColorStop(.35,"rgba(244,221,151,"+(.20*flicker)+")");
-    glow.addColorStop(1,"rgba(244,221,151,0)");
-    ctx.fillStyle=glow;ctx.beginPath();ctx.arc(p.x,p.y-92,300,0,Math.PI*2);ctx.fill();
-    for(let i=0;i<8;i++){
-      const a=t/900+i*2.1,r=36+(i%4)*12;ctx.fillStyle="rgba(246,231,177,.28)";
-      ctx.fillRect(p.x+Math.cos(a)*r,p.y-100+Math.sin(a*1.7)*24,2,2);
-    }
+  const flicker=flickering?(Math.sin(t*.055+seed*3)>0?.95:.08):1;
+  if(lights||flickering){
+    const power=(lights?1:.65)*flicker;
+    const cone=ctx.createLinearGradient(p.x,p.y-118,p.x,p.y+125);
+    cone.addColorStop(0,"rgba(255,236,174,"+(.22*power)+")");cone.addColorStop(1,"rgba(255,236,174,0)");
+    ctx.fillStyle=cone;ctx.beginPath();ctx.moveTo(p.x-13,p.y-116);ctx.lineTo(p.x-78,p.y+95);ctx.lineTo(p.x+78,p.y+95);ctx.closePath();ctx.fill();
+    const halo=ctx.createRadialGradient(p.x,p.y-120,4,p.x,p.y-120,110);
+    halo.addColorStop(0,"rgba(255,242,194,"+(.48*power)+")");halo.addColorStop(.35,"rgba(245,223,162,"+(.16*power)+")");halo.addColorStop(1,"rgba(245,223,162,0)");
+    ctx.fillStyle=halo;ctx.beginPath();ctx.arc(p.x,p.y-120,110,0,Math.PI*2);ctx.fill();
   }
-  const metal=ctx.createLinearGradient(p.x-12,0,p.x+12,0);metal.addColorStop(0,"#090b0a");metal.addColorStop(.5,"#343934");metal.addColorStop(1,"#0a0c0b");
-  ctx.fillStyle=metal;ctx.fillRect(p.x-8,p.y-126,16,138);ctx.fillRect(p.x-31,p.y-132,62,10);
-  ctx.fillStyle=lights?"#fff0bb":"#292d29";ctx.fillRect(p.x-19,p.y-168,38,34);
-  ctx.strokeStyle="#555e55";ctx.strokeRect(p.x-19,p.y-168,38,34);
+  const post=ctx.createLinearGradient(p.x-10,0,p.x+10,0);post.addColorStop(0,"#080b09");post.addColorStop(.5,"#3b433d");post.addColorStop(1,"#0a0c0a");
+  ctx.fillStyle=post;ctx.fillRect(p.x-5,p.y-113,10,120);ctx.fillRect(p.x-22,p.y-128,44,7);
+  ctx.fillStyle=(lights||flickering)?"#f4e5b7":"#171b18";ctx.fillRect(p.x-14,p.y-142,28,20);
+  ctx.strokeStyle="#657066";ctx.lineWidth=2;ctx.strokeRect(p.x-14,p.y-142,28,20);
+  ctx.fillStyle="rgba(0,0,0,.34)";ctx.beginPath();ctx.ellipse(p.x,p.y+7,26,8,0,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+
+function drawLampCourt(ctx:CanvasRenderingContext2D,lights:boolean,flickering:boolean,t:number){
+  const p=ZONES.lamp.p;
+  const lamps=[{x:p.x-135,y:p.y-45},{x:p.x+135,y:p.y-45},{x:p.x-120,y:p.y+125},{x:p.x+120,y:p.y+125}];
+  ctx.save();
+  const court=ctx.createRadialGradient(p.x,p.y,30,p.x,p.y,240);court.addColorStop(0,"rgba(58,66,57,.42)");court.addColorStop(1,"rgba(18,25,19,0)");
+  ctx.fillStyle=court;ctx.beginPath();ctx.ellipse(p.x,p.y+45,225,170,0,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle="rgba(101,113,100,.23)";ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(p.x,p.y+25,170,118,0,0,Math.PI*2);ctx.stroke();
+  lamps.forEach((lp,i)=>drawStreetLamp(ctx,lp,lights,flickering,t,i));
+  ctx.fillStyle="#5a6359";ctx.fillRect(p.x-50,p.y+34,100,5);
+  ctx.font="800 11px Inter,Segoe UI,sans-serif";ctx.textAlign="center";ctx.fillStyle="rgba(214,224,210,.72)";ctx.fillText("LAMP COURT",p.x,p.y+65);
   ctx.restore();
 }
 
 function drawPond(ctx:CanvasRenderingContext2D,t:number){
   const p=ZONES.pond.p;
   ctx.save();
-  const rim=ctx.createRadialGradient(p.x,p.y,95,p.x,p.y,205);rim.addColorStop(0,"#0b1412");rim.addColorStop(1,"#202a23");
-  ctx.fillStyle=rim;ctx.beginPath();ctx.ellipse(p.x,p.y,205,125,0,0,Math.PI*2);ctx.fill();
-  const water=ctx.createLinearGradient(0,p.y-110,0,p.y+110);water.addColorStop(0,"#13201f");water.addColorStop(.45,"#08110f");water.addColorStop(1,"#020706");
-  ctx.fillStyle=water;ctx.beginPath();ctx.ellipse(p.x,p.y,182,105,0,0,Math.PI*2);ctx.fill();
-  ctx.strokeStyle="rgba(187,211,199,.17)";ctx.lineWidth=2;
-  for(let i=0;i<8;i++){const yy=p.y-62+i*17+Math.sin(t/520+i)*4;ctx.beginPath();ctx.moveTo(p.x-118+i*4,yy);ctx.bezierCurveTo(p.x-45,yy-4,p.x+45,yy+4,p.x+118-i*5,yy);ctx.stroke();}
-  const moon=ctx.createRadialGradient(p.x-48,p.y-28,2,p.x-48,p.y-28,48);moon.addColorStop(0,"rgba(210,224,217,.18)");moon.addColorStop(1,"rgba(210,224,217,0)");
-  ctx.fillStyle=moon;ctx.beginPath();ctx.arc(p.x-48,p.y-28,48,0,Math.PI*2);ctx.fill();
+  const bank=ctx.createRadialGradient(p.x,p.y,130,p.x,p.y,245);bank.addColorStop(0,"#162019");bank.addColorStop(.62,"#263229");bank.addColorStop(1,"rgba(15,21,17,0)");
+  ctx.fillStyle=bank;ctx.beginPath();ctx.ellipse(p.x,p.y,245,154,-.04,0,Math.PI*2);ctx.fill();
+
+  const water=ctx.createLinearGradient(p.x,p.y-125,p.x,p.y+125);water.addColorStop(0,"#1b302f");water.addColorStop(.32,"#102321");water.addColorStop(.7,"#071311");water.addColorStop(1,"#020807");
+  ctx.fillStyle=water;ctx.beginPath();ctx.ellipse(p.x,p.y,205,118,-.04,0,Math.PI*2);ctx.fill();
+
+  // Layered moon reflection: broken streaks move with the water instead of a flat glow.
+  for(let i=0;i<12;i++){
+    const wave=Math.sin(t/430+i*.78)*7;
+    const yy=p.y-74+i*13;
+    const half=18+i*5+Math.sin(t/620+i)*6;
+    ctx.strokeStyle="rgba(211,225,217,"+(0.055+i*.006)+")";ctx.lineWidth=i%3===0?3:1.5;
+    ctx.beginPath();ctx.moveTo(p.x-half+wave,yy);ctx.bezierCurveTo(p.x-half*.25,yy-3,p.x+half*.25,yy+3,p.x+half-wave,yy);ctx.stroke();
+  }
+  const moon=ctx.createRadialGradient(p.x,p.y-48,4,p.x,p.y-48,62);moon.addColorStop(0,"rgba(235,241,224,.30)");moon.addColorStop(.4,"rgba(207,224,213,.10)");moon.addColorStop(1,"rgba(207,224,213,0)");
+  ctx.fillStyle=moon;ctx.beginPath();ctx.ellipse(p.x,p.y-48,66,35,0,0,Math.PI*2);ctx.fill();
+
+  // Random-looking ripple rings.
+  for(let i=0;i<4;i++){
+    const phase=(t/900+i*.31)%1,r=12+phase*70;
+    ctx.strokeStyle="rgba(158,190,181,"+(0.12*(1-phase))+")";ctx.lineWidth=1;
+    ctx.beginPath();ctx.ellipse(p.x-80+i*52,p.y+22+(i%2)*18,r,r*.34,0,0,Math.PI*2);ctx.stroke();
+  }
+  ctx.font="800 11px Inter,Segoe UI,sans-serif";ctx.textAlign="center";ctx.fillStyle="rgba(215,227,218,.76)";ctx.fillText("MOON POND",p.x,p.y+155);
   ctx.restore();
 }
 
@@ -399,10 +426,51 @@ function drawLandmarks(ctx:CanvasRenderingContext2D){
   }
 }
 
-function drawWorld(ctx:CanvasRenderingContext2D,t:number,lights:boolean,hatchPanic:boolean,bodies:Agent[],quality:GameSettings["graphics"]){
+function drawTaskStructures(ctx:CanvasRenderingContext2D){
+  const shed=ZONES.shed.p;
+  ctx.save();ctx.translate(shed.x,shed.y);
+  const wood=ctx.createLinearGradient(-75,-60,75,60);wood.addColorStop(0,"#384037");wood.addColorStop(.45,"#202820");wood.addColorStop(1,"#111713");
+  ctx.fillStyle="rgba(0,0,0,.38)";ctx.beginPath();ctx.ellipse(0,56,95,22,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=wood;ctx.fillRect(-72,-58,144,112);ctx.fillStyle="#111713";ctx.fillRect(-22,-5,44,59);
+  ctx.fillStyle="#252e26";ctx.beginPath();ctx.moveTo(-88,-58);ctx.lineTo(0,-105);ctx.lineTo(88,-58);ctx.closePath();ctx.fill();
+  ctx.strokeStyle="#647064";ctx.strokeRect(-72,-58,144,112);
+  ctx.font="800 11px Inter,Segoe UI,sans-serif";ctx.textAlign="center";ctx.fillStyle="#c2cec0";ctx.fillText("TOOL SHED",0,78);ctx.restore();
+
+  const ward=ZONES.ward.p;
+  ctx.save();ctx.translate(ward.x,ward.y);
+  for(let i=0;i<4;i++){const a=i*Math.PI/2+.45,x=Math.cos(a)*72,y=Math.sin(a)*44;ctx.fillStyle="#303a32";ctx.beginPath();ctx.roundRect(x-16,y-26,32,52,7);ctx.fill();ctx.strokeStyle="rgba(145,164,143,.42)";ctx.stroke();ctx.fillStyle="rgba(198,215,195,.12)";ctx.fillRect(x-2,y-18,4,35);}
+  ctx.strokeStyle="rgba(145,169,143,.18)";ctx.beginPath();ctx.ellipse(0,0,102,70,0,0,Math.PI*2);ctx.stroke();
+  ctx.font="800 11px Inter,Segoe UI,sans-serif";ctx.textAlign="center";ctx.fillStyle="#c0ccc0";ctx.fillText("MEMORIAL WARD",0,96);ctx.restore();
+}
+
+function drawZoneWorldLabels(ctx:CanvasRenderingContext2D){
+  for(const z of ALL_ZONES){
+    const p=ZONES[z].p;
+    ctx.save();ctx.font="800 12px Inter,Segoe UI,sans-serif";ctx.textAlign="center";
+    const w=Math.max(100,ctx.measureText(ZONES[z].name.toUpperCase()).width+28);
+    ctx.fillStyle="rgba(2,7,4,.68)";ctx.fillRect(p.x-w/2,p.y-205,w,25);
+    ctx.strokeStyle="rgba(172,191,168,.22)";ctx.strokeRect(p.x-w/2,p.y-205,w,25);
+    ctx.fillStyle="rgba(224,234,220,.84)";ctx.fillText(ZONES[z].name.toUpperCase(),p.x,p.y-188);ctx.restore();
+  }
+}
+
+function drawWatchingEyes(ctx:CanvasRenderingContext2D,t:number){
+  const cycle=t%11500;
+  if(cycle<7600||cycle>8650)return;
+  const index=Math.floor(t/11500)%Math.max(1,TREE_POINTS.length);
+  const tree=TREE_POINTS[index]||{x:900,y:900};
+  const alpha=Math.sin(((cycle-7600)/1050)*Math.PI)*.8;
+  ctx.save();ctx.translate(tree.x+38,tree.y-82);
+  const glow=ctx.createRadialGradient(0,0,1,0,0,28);glow.addColorStop(0,"rgba(213,225,194,"+(alpha*.2)+")");glow.addColorStop(1,"rgba(213,225,194,0)");ctx.fillStyle=glow;ctx.beginPath();ctx.arc(0,0,28,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="rgba(229,237,199,"+alpha+")";ctx.beginPath();ctx.ellipse(-7,0,3.2,1.8,0,0,Math.PI*2);ctx.ellipse(7,0,3.2,1.8,0,0,Math.PI*2);ctx.fill();ctx.restore();
+}
+
+function drawWorld(ctx:CanvasRenderingContext2D,t:number,lights:boolean,lightsFlickering:boolean,hatchPanic:boolean,bodies:Agent[],quality:GameSettings["graphics"]){
   const bg=ctx.createLinearGradient(0,0,0,WORLD.height);bg.addColorStop(0,"#0d1512");bg.addColorStop(.58,"#111a14");bg.addColorStop(1,"#060a08");ctx.fillStyle=bg;ctx.fillRect(0,0,WORLD.width,WORLD.height);
 
-  ctx.fillStyle="#152018";ctx.fillRect(80,80,WORLD.width-160,WORLD.height-140);
+  const lawn=ctx.createLinearGradient(0,80,WORLD.width,WORLD.height);lawn.addColorStop(0,"#19241b");lawn.addColorStop(.5,"#101a13");lawn.addColorStop(1,"#0b120e");ctx.fillStyle=lawn;ctx.fillRect(80,80,WORLD.width-160,WORLD.height-140);
+  // damp soil patches and shallow puddles break up the flat lawn
+  for(let i=0;i<42;i++){const x=160+((i*419)% (WORLD.width-320)),y=150+((i*271)%(WORLD.height-300));ctx.fillStyle=i%3===0?"rgba(7,16,13,.32)":"rgba(32,46,34,.22)";ctx.beginPath();ctx.ellipse(x,y,30+(i%5)*9,10+(i%4)*4,(i%7)*.13,0,Math.PI*2);ctx.fill();}
   const detail=quality==="low"?.42:quality==="medium"?.68:quality==="high"?1:1.28;
   for(let i=0;i<Math.floor(280*detail);i++){
     const x=100+((i*193+PROFILE.seed)%(WORLD.width-200)),y=100+((i*317+PROFILE.seed*3)%(WORLD.height-200));
@@ -420,11 +488,14 @@ function drawWorld(ctx:CanvasRenderingContext2D,t:number,lights:boolean,hatchPan
   for(let i=0;i<Math.floor(24*detail);i++){drawBush(ctx,{x:170+((i*229)%(WORLD.width-340)),y:180+((i*401)%(WORLD.height-360))},i+11);}
   for(const r of ROCK_POINTS){ctx.fillStyle="#293029";ctx.beginPath();ctx.ellipse(r.x,r.y,31,20,.2,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#454e45";ctx.stroke();}
   drawLandmarks(ctx);
+  drawTaskStructures(ctx);
 
-  drawLampCourt(ctx,lights,t);
+  drawLampCourt(ctx,lights,lightsFlickering,t);
   drawPond(ctx,t);
   drawShrine(ctx);
   drawHatch(ctx,hatchPanic,t);
+  drawZoneWorldLabels(ctx);
+  if(!lights)drawWatchingEyes(ctx,t);
 
   ctx.fillStyle="rgba(190,205,195,.035)";
   for(let i=0;i<18;i++){const x=820+((i*83)%480),y=800+((i*137)%420);ctx.beginPath();ctx.ellipse(x,y,28+(i%4)*7,5+(i%3),0,0,Math.PI*2);ctx.fill();}
@@ -680,14 +751,22 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
           if(mimic?.alive){
             if(now-lastSabotage.current>18000){
               lastSabotage.current=now;
-              const cutLights=Math.random()>.52;
-              if(cutLights)setLights(false);else setHatchPanic(true);
-              const sabotageZone:ZoneKey=cutLights?"lamp":"hatch";
+              const sabotageZone=ALL_ZONES[(Math.floor(now/1000)+PROFILE.seed)%ALL_ZONES.length];
               const zone=ZONES[sabotageZone].name;
+              setTasks(current=>({...current,[sabotageZone]:false}));
+              setUnstableTasks(current=>({...current,[sabotageZone]:true}));
+              if(sabotageZone==="lamp"){
+                setLightsFlickering(true);
+                setMessage("Lamp Court voltage is collapsing — the street lights are flickering.");
+                setTimeout(()=>{setLightsFlickering(false);setLights(false);setMessage("BLACKOUT. Lamp Court is dead. Repair its circuit or use your flashlight.");},1350);
+              }else if(sabotageZone==="hatch"){
+                setHatchPanic(true);setMessage("Central Hatch was sabotaged. Its bolt puzzle must be secured again.");
+              }else{
+                setMessage(zone+" was sabotaged. The Mimic corrupted the task — return and redo its puzzle.");
+              }
               agentsRef.current=agentsRef.current.map(a=>a.alive&&dist(a.p,ZONES[sabotageZone].p)<265?{...a,suspicion:a.suspicion+1}:a);
-              setEvidence(prev=>[...prev.slice(-3),"System log: "+zone+" failed. Multiple Keepers crossed the sector; no identity confirmed."]);
-              setRoundNotes(prev=>[...prev.slice(-7),(cutLights?"Lights":"Hatch")+" sabotaged near "+zone+"."]);
-              setMessage(cutLights?"Power sabotage. The Garden is dim, but still navigable.":"Hatch sabotage detected. Watch who leaves the area.");
+              setEvidence(prev=>[...prev.slice(-3),"System log: "+zone+" was sabotaged. Multiple Keepers crossed the sector; no identity confirmed."]);
+              setRoundNotes(prev=>[...prev.slice(-7),zone+" was sabotaged and became unstable."]);
               if(settings.screenShake&&!settings.reducedMotion)shakeUntil.current=now+420;
               hatchAudio.current?.cue("danger");
             }
@@ -737,7 +816,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       const shakeX=shaking?Math.sin(now*.11)*5:0,shakeY=shaking?Math.cos(now*.13)*4:0;
       ctx.clearRect(0,0,VIEW.width,VIEW.height);ctx.save();ctx.scale(zoom,zoom);ctx.translate(-cam.current.x+shakeX/zoom,-cam.current.y+shakeY/zoom);
       const renderAgents=agentsRef.current;
-      drawWorld(ctx,settings.reducedMotion?0:now,lights,hatchPanic,[],settings.graphics);
+      drawWorld(ctx,settings.reducedMotion?0:now,lights,lightsFlickering,hatchPanic,[],settings.graphics);
       renderAgents.forEach(a=>{
         const sp=npcSprites[String(a.tokenId)];
         if(a.alive){if(sp)drawNpcFriend(ctx,sp,a,now);else drawKeeper(ctx,a,now);drawChoreEffect(ctx,a,now);}
@@ -780,7 +859,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     };
     raf=requestAnimationFrame(loop);
     return()=>{cancelAnimationFrame(raf);window.removeEventListener("keydown",kd);window.removeEventListener("keyup",ku)};
-  },[sprites,npcSprites,phase,paused,menu,role,lights,hatchPanic,inventory.flashlight,flashlightOn,settings]);
+  },[sprites,npcSprites,phase,paused,menu,role,lights,lightsFlickering,hatchPanic,inventory.flashlight,flashlightOn,settings]);
 
   function start(){
     void hatchAudio.current?.resume();
@@ -944,8 +1023,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   function sabotage(kind:"lights"|"hatch"){
     if(role!=="mimic"||phase!=="play"||shiftCooldown>0)return;
     setShiftCooldown(12);
-    if(kind==="lights"){setLights(false);setMessage("You killed the lights. Move before they restore them.");}
-    else{setHatchPanic(true);setMessage("You destabilized the Hatch. Everyone will have to respond.");}
+    if(kind==="lights"){setLightsFlickering(true);setTasks(v=>({...v,lamp:false}));setUnstableTasks(v=>({...v,lamp:true}));setMessage("You overloaded Lamp Court. The lights begin to flicker.");setTimeout(()=>{setLightsFlickering(false);setLights(false);},1200);}
+    else{setHatchPanic(true);setTasks(v=>({...v,hatch:false}));setUnstableTasks(v=>({...v,hatch:true}));setMessage("You destabilized the Hatch. Its seal puzzle must be done again.");}
     sound.current?.play("impact");
   }
 
@@ -990,7 +1069,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
 
   function useFlare(){
     if(inventory.flare<=0||phase!=="play")return;
-    setInventory(v=>({...v,flare:v.flare-1}));setLights(true);setMessage("Emergency Flare ignited — the whole Garden is lit again.");
+    setInventory(v=>({...v,flare:v.flare-1}));setLightsFlickering(false);setLights(true);setMessage("Emergency Flare ignited — the whole Garden is lit again.");
     sound.current?.play("reward");
   }
 
