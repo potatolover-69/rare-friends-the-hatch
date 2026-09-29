@@ -113,3 +113,8 @@ border-left:1px solid rgba(207,219,203,.3);box-shadow:-30px 0 90px rgba(0,0,0,.6
 }
 
 .bottom-actions .context-ready{border-color:#d4dfcf;background:linear-gradient(180deg,rgba(43,55,44,.98),rgba(12,18,13,.96));box-shadow:0 0 0 1px rgba(220,232,215,.08),0 0 24px rgba(173,197,168,.10)}
+
+.economy-hud,.friend-badge{position:absolute;z-index:20;display:flex;flex-direction:column;gap:2px;padding:7px 9px;background:rgba(4,8,5,.72);border:1px solid rgba(154,171,151,.18);backdrop-filter:blur(6px);pointer-events:none}
+.economy-hud{right:14px;top:118px;text-align:right}.friend-badge{left:14px;top:188px}
+.economy-hud b,.friend-badge b{font:800 8px ui-monospace;letter-spacing:.06em;color:#e4ece1}.economy-hud span,.friend-badge span{font:600 7px ui-monospace;color:#829080}
+@media(max-width:700px){.economy-hud{right:7px;top:99px}.friend-badge{left:7px;top:168px}.economy-hud span,.friend-badge span{display:none}}
