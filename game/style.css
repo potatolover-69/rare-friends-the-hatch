@@ -334,3 +334,15 @@ linear-gradient(145deg,#172219,#08100a 72%)!important}
   .speaker-cinematic{grid-template-columns:1fr;max-height:84%;overflow:auto}.speaker-camera{min-height:190px;border-right:0;border-bottom:1px solid rgba(176,193,172,.16)}.speaker-silhouette{width:68px;height:90px;font-size:28px}.speaker-dialogue{padding:18px}.speaker-dialogue p{font-size:13px}
   .task-puzzle{width:92%;padding:13px}.task-puzzle-head h2{font-size:22px}.circuit-board{gap:6px;padding:10px}.circuit-board button{height:72px}.mirror-row,.symbol-row,.ward-stones{gap:6px}.mirror-row button{height:90px}.bolt-ring{width:190px;height:190px}.bolt-ring button:nth-of-type(1){left:59px}.bolt-ring button:nth-of-type(3){left:59px}.bolt-ring button:nth-of-type(2){top:59px}.bolt-ring button:nth-of-type(4){top:59px}
 }
+
+
+/* Final remaining presentation polish */
+.friend-portrait-canvas{
+  width:112px;height:132px;image-rendering:pixelated;image-rendering:crisp-edges;
+  border:1px solid rgba(214,226,210,.46);background:radial-gradient(circle at 50% 45%,rgba(65,82,65,.32),rgba(4,8,5,.88) 70%);
+  box-shadow:0 0 0 6px rgba(213,228,208,.035),0 0 44px rgba(180,206,176,.09)
+}
+.statusbox.danger{border-color:rgba(190,110,82,.44)!important;box-shadow:0 0 28px rgba(146,67,44,.12)!important}
+.statusbox.danger b{color:#e1b49a!important}.statusbox.danger span{color:#c99274!important}
+.map-marker.zone.unstable span{background:rgba(54,19,11,.88)!important;border:1px solid rgba(192,111,75,.26);padding:3px 5px}
+@media(max-width:700px){.friend-portrait-canvas{width:82px;height:98px}}
