@@ -1139,74 +1139,99 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   }
 
   function openMeeting(reason:string){
-    const alive=agentsRef.current.filter(a=>a.alive);
-    const mimic=alive.find(a=>a.id==="mimic");
-    const cadence=["I stayed on my route.","I doubled back once.","I kept my head down.","I watched the crossroads.","I finished what I was assigned."];
-    const lines=alive.map((a,i)=>{
-      const recent=a.lastSeenName&&performance.now()-a.lastSeenAt<18000;
+    const alive=agentsRef.current.filter(a=>a.alive),mimic=alive.find(a=>a.id==="mimic");
+    const cadence=[
+      "I stayed on the marked route unless the alarm forced me off it.",
+      "I stopped once because I heard the relay buzzing.",
+      "I crossed the center path, then returned to my station.",
+      "I avoided the dark path and kept close to the lamps.",
+      "I lost sight of everyone for a few seconds near the trees.",
+      "I checked the map before heading back to my next chore.",
+      "I heard footsteps behind me, but I never got a clean look.",
+      "I saw movement near the path but couldn't tell which Friend it was."
+    ];
+    const honestOpeners:Record<Personality,string[]>={
+      careful:["I kept track of my route.","I tried to remember the order of every stop.","I was checking who crossed my path."],
+      nervous:["I was already nervous before the report.","The blackout threw me off.","I kept looking over my shoulder."],
+      direct:["Here's exactly what I did.","My route was simple.","I'll keep this short."],
+      quiet:["I stayed mostly alone.","I didn't talk to anyone.","I kept to the edge of the Garden."],
+      watchful:["I watched the crossroads while I worked.","I paid attention to movement between stations.","I was watching the paths more than the task."]
+    };
+    const mimicOpeners=[
+      "I was where I was supposed to be.",
+      "I finished my route and only moved when the alarm started.",
+      "I don't know why anyone would put me near the scene.",
+      "I was working when everything went wrong.",
+      "I can account for most of my route."
+    ];
+    const lines=alive.map(a=>{
+      const recent=a.lastSeenName&&performance.now()-a.lastSeenAt<22000;
       const truthfulPlace=a.lastAction.includes("working")?a.lastAction:"I "+a.lastAction;
       if(a.id==="mimic"){
-        const lieZone=ALL_ZONES[(a.choreIndex+1+(i%2))%ALL_ZONES.length];
-        const suspects=alive.filter(x=>x.id!==a.id);
-        const blame=suspects.sort((x,y)=>y.suspicion-x.suspicion)[0]||suspects[0];
-        const lieByPersonality:Record<Personality,string>={
-          careful:"I checked "+ZONES[lieZone].name+" twice. "+(blame?blame.name+" crossed behind me.":"I saw nobody."),
-          nervous:"I was at "+ZONES[lieZone].name+"—I think. "+(blame?"Ask "+blame.name+", they were close.":"I panicked when the lights changed."),
-          direct:"I did "+ZONES[lieZone].name+". "+(blame?blame.name+" is the one I'd question.":"That's all."),
-          quiet:""+ZONES[lieZone].name+". "+(blame?"Saw "+blame.name+".":"Alone."),
-          watchful:"I was watching the path from "+ZONES[lieZone].name+". "+(blame?blame.name+" changed direction after the alarm.":"No one passed me.")
-        };
-        return {name:a.name,text:lieByPersonality[a.personality]};
+        const lieOptions=ALL_ZONES.filter(z=>z!==a.lastZone),lieZone=choose(lieOptions.length?lieOptions:ALL_ZONES);
+        const suspects=alive.filter(x=>x.id!==a.id),blame=suspects.length?[...suspects].sort((x,y)=>y.suspicion-x.suspicion)[Math.floor(Math.random()*Math.min(2,suspects.length))]:null;
+        return {name:a.name,text:choose(mimicOpeners)+" I was around "+ZONES[lieZone].name+". "+choose([
+          blame?"I remember "+blame.name+" changing direction after the alarm.":"I didn't see anyone clearly.",
+          blame?"If you're checking routes, ask "+blame.name+" why they crossed mine.":"The dark made the route impossible to read.",
+          blame?blame.name+" was the last Friend I noticed nearby.":"I only heard footsteps.",
+          "The lights changed while I was between stations."
+        ])};
       }
-      const memory=recent?" I remember "+a.lastSeenName+" near "+ZONES[a.lastSeenZone].name+".":" I don't have a clean visual on anyone.";
-      const style:Record<Personality,string>={
-        careful:"I kept notes: "+truthfulPlace+".",
-        nervous:"I was trying to stay calm. "+truthfulPlace+".",
-        direct:truthfulPlace+".",
-        quiet:truthfulPlace+".",
-        watchful:"I watched the route while I worked. "+truthfulPlace+"."
-      };
-      return {name:a.name,text:style[a.personality]+memory+" "+cadence[i%cadence.length]};
+      const memory=recent?choose([
+        " I remember "+a.lastSeenName+" near "+ZONES[a.lastSeenZone].name+".",
+        " The last Friend I clearly saw was "+a.lastSeenName+" around "+ZONES[a.lastSeenZone].name+".",
+        " I crossed paths with "+a.lastSeenName+" near "+ZONES[a.lastSeenZone].name+", but that was before the report."
+      ]):choose([
+        " I don't have a clean visual on another Keeper.",
+        " I was alone long enough that I can't give you a useful witness.",
+        " I heard movement, but I can't honestly attach a name to it."
+      ]);
+      return {name:a.name,text:choose(honestOpeners[a.personality])+" "+truthfulPlace+"."+memory+" "+choose(cadence)};
     });
-    if(mimic&&inventory.uv>0)lines.push({name:"UV Scanner",text:"Trace mismatch detected: one Keeper's claimed route conflicts with a recent task-zone ping. Identity intentionally unresolved."});
-    setTestimony(lines);setMeetingReason(reason);setMeetingStage("report");setSpeakerIndex(0);setPhase("meeting");setVotes({});setMessage("Compare chores, timing, memories and contradictions. The Mimic can lie convincingly.");setRoundNotes(prev=>[...prev.slice(-7),reason]);sound.current?.play("select");hatchAudio.current?.cue("meeting");
+    if(mimic&&inventory.uv>0)lines.push({name:"UV Scanner",text:choose([
+      "One recent route ping conflicts with one testimony, but the scanner cannot identify which speaker is wrong.",
+      "UV residue shows that one Keeper doubled back through a station they did not mention.",
+      "A partial trace disagrees with one alibi. The identity field is corrupted."
+    ])});
+    setTestimony(lines);setMeetingReason(reason);setMeetingStage("report");setSpeakerIndex(0);setPhase("meeting");setVotes({});
+    setMessage("REPORT ALERT — read the statements at your own pace, then decide whether to vote or skip.");
+    setRoundNotes(prev=>[...prev.slice(-8),reason]);sound.current?.play("select");hatchAudio.current?.cue("meeting");hatchAudio.current?.siren();
   }
 
   function vote(id:string){
-    const candidates=agentsRef.current.filter(a=>a.alive);
-    const tally:Record<string,number>={[id]:1};
+    const candidates=agentsRef.current.filter(a=>a.alive),tally:Record<string,number>={[id]:1};
     for(const voter of candidates){
       if(Math.random()<.16)continue;
-      const pool=candidates.filter(c=>c.id!==voter.id);
-      if(!pool.length)continue;
+      const pool=candidates.filter(c=>c.id!==voter.id);if(!pool.length)continue;
       const ranked=[...pool].sort((a,b)=>{
-        const memoryA=(voter.lastSeenName===a.name?1.1:0)+a.suspicion;
-        const memoryB=(voter.lastSeenName===b.name?1.1:0)+b.suspicion;
-        const noiseA=((Number(a.tokenId%17n)+voter.choreIndex)%7)*.08;
-        const noiseB=((Number(b.tokenId%17n)+voter.choreIndex)%7)*.08;
+        const memoryA=(voter.lastSeenName===a.name?1.1:0)+a.suspicion, memoryB=(voter.lastSeenName===b.name?1.1:0)+b.suspicion;
+        const noiseA=((Number(a.tokenId%17n)+voter.choreIndex)%7)*.08,noiseB=((Number(b.tokenId%17n)+voter.choreIndex)%7)*.08;
         return (memoryB+noiseB)-(memoryA+noiseA);
       });
       let pick=ranked[0];
-      if(voter.id==="mimic"){
-        const innocents=ranked.filter(a=>a.id!=="mimic");
-        pick=innocents[0]||pick;
-      }else if(Math.random()<.28){
-        pick=ranked[Math.min(ranked.length-1,1)];
-      }
+      if(voter.id==="mimic"){const innocents=ranked.filter(a=>a.id!=="mimic");pick=innocents[0]||pick;}
+      else if(Math.random()<.32)pick=ranked[Math.min(ranked.length-1,1)];
       if(pick)tally[pick.id]=(tally[pick.id]||0)+1;
     }
     setVotes(tally);hatchAudio.current?.cue("vote");
-    const ordered=Object.entries(tally).sort((a,b)=>b[1]-a[1]);
-    const top=ordered[0],second=ordered[1];
-    const tied=top&&second&&top[1]===second[1];
-    const ejected=!tied&&top?agentsRef.current.find(a=>a.id===top[0]):null;
-    setTimeout(()=>{
-      if(!ejected){setMessage("Vote tied. Nobody was expelled.");setRoundNotes(prev=>[...prev.slice(-7),"Meeting ended in a tie."]);setPhase("play");return;}
-      if(role==="friend"&&ejected.id==="mimic"){finish("won",ejected.name+" was the Mimic. The remaining Keepers seal the Hatch.");return;}
-      if(role==="mimic"&&ejected.id==="mimic"){finish("lost","The Keepers identified you before the Hatch opened.");return;}
-      setRoundNotes(prev=>[...prev.slice(-7),ejected.name+" was accused, but the evidence was wrong."]);
-      setEvidence(prev=>[...prev.slice(-3),"Vote result: "+ejected.name+" was cleared. The Mimic is still among the Keepers."]);
-      setMessage(ejected.name+" was not the Mimic. The Mimic is still among the Keepers.");
+    const ordered=Object.entries(tally).sort((a,b)=>b[1]-a[1]),top=ordered[0],second=ordered[1],tied=top&&second&&top[1]===second[1];
+    const accused=!tied&&top?agentsRef.current.find(a=>a.id===top[0]):null;
+    window.setTimeout(()=>{
+      if(!accused){setMessage("Vote tied. Nobody was detained. The Mimic is still among the Keepers.");setRoundNotes(prev=>[...prev.slice(-8),"Meeting ended in a tie."]);setPhase("play");return;}
+      if(role==="friend"&&accused.id==="mimic"){
+        mimicCaughtRef.current=true;setMimicCaught(true);
+        updateAgents(xs=>xs.map(a=>a.id==="mimic"?{...a,alive:false,reported:true,lastAction:"detained after the vote"}:a));
+        setMilestone("MIMIC EXPOSED");window.setTimeout(()=>setMilestone(null),2500);
+        const done=Object.values(tasksRef.current).every(Boolean);
+        if(done&&!sabotageRef.current){finish("won",accused.name+" was the Mimic. All containment stations are secure.");return;}
+        setMessage(accused.name+" was the Mimic. Correct vote — now finish every containment station before sunrise.");
+        setRoundNotes(prev=>[...prev.slice(-8),accused.name+" was correctly identified as the Mimic."]);
+        setPhase("play");return;
+      }
+      if(role==="mimic"&&accused.id==="mimic"){finish("lost","The Keepers identified you before the Hatch opened.");return;}
+      setRoundNotes(prev=>[...prev.slice(-8),accused.name+" was accused, but the evidence was wrong."]);
+      setEvidence(prev=>[...prev.slice(-4),"Vote result: "+accused.name+" was cleared. The Mimic is still among the Keepers."]);
+      setMessage(accused.name+" was not the Mimic. Nothing ends — the Mimic is still among the Keepers.");
       setPhase("play");
     },950);
   }
