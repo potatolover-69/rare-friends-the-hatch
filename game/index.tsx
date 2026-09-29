@@ -888,29 +888,13 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
           const currentAgents=agentsRef.current;
           const mimic=currentAgents.find(a=>a.id==="mimic");
           if(mimic?.alive){
-            if(now-lastSabotage.current>18000){
-              lastSabotage.current=now;
-              const secured=ALL_ZONES.filter(z=>tasksRef.current[z]);
-              const pool=secured.length?secured:ALL_ZONES;
-              const sabotageZone=pool[(Math.floor(now/1000)+PROFILE.seed)%pool.length];
-              const zone=ZONES[sabotageZone].name;
-              setLastSabotagedZone(sabotageZone);
-              setTasks(current=>({...current,[sabotageZone]:false}));
-              setUnstableTasks(current=>({...current,[sabotageZone]:true}));
-              if(sabotageZone==="lamp"){
-                setLightsFlickering(true);
-                setMessage("Lamp Court voltage is collapsing — the street lights are flickering.");
-                setTimeout(()=>{setLightsFlickering(false);setLights(false);setMessage("BLACKOUT. Lamp Court is dead. Repair its circuit or use your flashlight.");},1350);
-              }else if(sabotageZone==="hatch"){
-                setHatchPanic(true);setMessage("Central Hatch was sabotaged. Its bolt puzzle must be secured again.");
-              }else{
-                setMessage(zone+" was sabotaged. The Mimic corrupted the task — return and redo its puzzle.");
-              }
-              agentsRef.current=agentsRef.current.map(a=>a.alive&&dist(a.p,ZONES[sabotageZone].p)<265?{...a,suspicion:a.suspicion+1}:a);
-              setEvidence(prev=>[...prev.slice(-3),"System log: "+zone+" was sabotaged. Multiple Keepers crossed the sector; no identity confirmed."]);
-              setRoundNotes(prev=>[...prev.slice(-7),zone+" was sabotaged and became unstable."]);
-              if(settings.screenShake&&!settings.reducedMotion)shakeUntil.current=now+420;
-              hatchAudio.current?.cue("danger");
+            if(!sabotageRef.current&&Date.now()>=nextSabotageAtRef.current){
+              const recent=new Set(sabotageHistoryRef.current);
+              let pool=ALL_ZONES.filter(z=>!recent.has(z));
+              if(!pool.length)pool=[...ALL_ZONES];
+              const sabotageZone=choose(pool);
+              triggerSabotage(sabotageZone);
+              agentsRef.current=agentsRef.current.map(a=>a.alive&&dist(a.p,ZONES[sabotageZone].p)<280?{...a,suspicion:a.suspicion+.45}:a);
             }
             if(now-lastKill.current>12500){
               const victims=currentAgents.filter(a=>a.alive&&a.id!=="mimic"&&dist(a.p,mimic.p)<115);
@@ -930,8 +914,16 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
                   });
                   const suspicious=next.map(a=>a.alive&&a.id!=="mimic"&&dist(a.p,victim.p)<320?{...a,suspicion:a.suspicion+.6}:a);
                   agentsRef.current=suspicious;setAgents(suspicious);
-                  setEvidence(prev=>[...prev.slice(-3),victim.name+" was found near "+ZONES[killZone].name+". No direct witness saw the attack."]);
-                  setRoundNotes(prev=>[...prev.slice(-7),victim.name+" went down near "+ZONES[killZone].name+"."]);
+                  const decoys=suspicious.filter(a=>a.alive&&a.id!=="mimic"),decoy=decoys.length?choose(decoys):null;
+                  const pair=decoy?shuffle([mimic.name,decoy.name],Math.floor(Math.random()*0x7fffffff)):[mimic.name,"another Keeper"];
+                  const clue=choose([
+                    "Wet route traces overlap between "+pair[0]+" and "+pair[1]+" near "+ZONES[killZone].name+".",
+                    "The victim's final route ping narrows the scene to "+pair[0]+" or "+pair[1]+", but the timestamp is incomplete.",
+                    "A lamp sensor registered two silhouettes leaving the sector: "+pair[0]+" and "+pair[1]+". It cannot tell which left first.",
+                    "One set of footprints doubles back toward "+ZONES[killZone].name+". Both "+pair[0]+" and "+pair[1]+" used that path tonight."
+                  ]);
+                  setEvidence(prev=>[...prev.slice(-4),victim.name+" was found near "+ZONES[killZone].name+". No direct witness saw the attack.","Scene clue: "+clue]);
+                  setRoundNotes(prev=>[...prev.slice(-8),victim.name+" went down near "+ZONES[killZone].name+"."]);
                   setMessage(victim.name+" is down. A Keeper may discover the body and call a meeting.");
                   if(settings.screenShake&&!settings.reducedMotion)shakeUntil.current=now+520;
                   sound.current?.play("impact");hatchAudio.current?.cue("danger");
