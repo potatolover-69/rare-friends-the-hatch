@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { GameComponentProps } from "@rarefriends/friendsdk/runtime";
-import { GameMenu } from "@rarefriends/friendsdk/frame";
 import type { GameSnapshot } from "@rarefriends/friendsdk/game";
 import { createFriendReader, spriteFrame, type GenerationSprites, type SpriteFacing } from "@rarefriends/friendsdk/sprites";
 import { createFriendSoundKit, type FriendSoundKit } from "@rarefriends/friendsdk/sounds";
@@ -14,6 +13,10 @@ type Phase="title"|"role"|"play"|"meeting"|"won"|"lost";
 type ZoneKey="lamp"|"pond"|"hatch"|"shrine"|"shed"|"ward";
 type Menu="store"|"inventory"|"settings"|"map"|"tutorial"|"task"|null;
 type MeetingStage="report"|"testimony"|"vote";
+type ShopKind="flashlight"|"battery"|"uv"|"flare"|"ward";
+type SabotageKind="blackout"|"overload"|"breach"|"corruption"|"perimeter";
+type ActiveSabotage={zone:ZoneKey;kind:SabotageKind;label:string;startedAt:number;deadlineAt:number;fatalText:string};
+type PuzzleTargets={lamp:number[];hatch:number[];pond:number[];shrine:string[];fuse:number;ward:boolean[]};
 type Personality="careful"|"nervous"|"direct"|"quiet"|"watchful";
 type SettingsTab="graphics"|"audio"|"gameplay";
 type GameSettings={
@@ -64,6 +67,14 @@ const BOT_NAMES=["Moth","Reed","Vale","Ash","Ivy"];
 const NPC_TOKEN_IDS=[334130n,334131n,334132n,334133n,334134n];
 const PERSONALITIES:Personality[]=["careful","nervous","direct","quiet","watchful"];
 const DEFAULT_SETTINGS:GameSettings={graphics:"high",fps:60,cameraZoom:1,brightness:1,fog:55,grain:22,master:75,music:42,ambience:62,sfx:78,reducedMotion:false,screenShake:true,hints:true};
+const ROUND_SECONDS=360;
+const SHOP_ITEMS:{kind:ShopKind;name:string;price:string;units:number;icon:string;desc:string;use:string}[]=[
+  {kind:"flashlight",name:"Field Flashlight",price:"0.10 RF",units:1,icon:"◐",desc:"Focused beam for true blackouts. Includes a full battery.",use:"Toggle with F"},
+  {kind:"battery",name:"Battery Pack",price:"0.10 RF",units:1,icon:"▰",desc:"Consumable 100% flashlight recharge.",use:"Use from HUD"},
+  {kind:"uv",name:"UV Trace Scanner",price:"0.20 RF",units:2,icon:"UV",desc:"Adds one ambiguous route inconsistency to meetings.",use:"Passive in meetings"},
+  {kind:"flare",name:"Emergency Flare",price:"0.30 RF",units:3,icon:"✦",desc:"Temporary emergency light while the power grid is down.",use:"Use from HUD"},
+  {kind:"ward",name:"Containment Ward",price:"0.10 RF",units:1,icon:"◇",desc:"Instantly cancels an active Hatch breach.",use:"Use from HUD"},
+];
 const TUTORIAL_STEPS=[
   {eyebrow:"01 · MOVE + EXPLORE",title:"Enter the Garden",body:"Use WASD, Arrow keys, or tap the ground. Trees, rocks and structures have collision, so follow the wet paths and learn the landmarks.",key:"WASD / TAP"},
   {eyebrow:"02 · USE THE MAP",title:"Know Where You Are",body:"Press M for the full Garden map. It shows six containment stations, roads, landmarks, completed tasks and sabotaged stations — but never reveals the Mimic.",key:"M · MAP"},
@@ -76,6 +87,7 @@ const TUTORIAL_STEPS=[
 ] as const;
 
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
+const choose=<T,>(items:T[])=>items[Math.floor(Math.random()*items.length)];
 const dist=(a:Point,b:Point)=>Math.hypot(a.x-b.x,a.y-b.y);
 const near=(a:Point,b:Point,r=95)=>dist(a,b)<r;
 const randPoint=(seed:number)=>({x:180+((seed*811)%(WORLD.width-360)),y:170+((seed*557)%(WORLD.height-340))});
@@ -116,6 +128,7 @@ type HatchAudio={
   resume:()=>Promise<void>;
   set:(settings:GameSettings,muted:boolean)=>void;
   cue:(kind:"meeting"|"danger"|"task"|"vote"|"win"|"lose")=>void;
+  siren:()=>void;
   dispose:()=>void;
 };
 
@@ -149,7 +162,16 @@ function createHatchAudio():HatchAudio|null{
     gain.gain.setValueAtTime(0,context.currentTime);gain.gain.linearRampToValueAtTime(.11,context.currentTime+.015);gain.gain.exponentialRampToValueAtTime(.001,context.currentTime+.32);
     osc.connect(gain).connect(sfx);osc.start();osc.stop(context.currentTime+.34);
   };
-  return {resume:async()=>{if(context.state==="suspended")await context.resume();},set,cue,dispose:()=>{try{drone.stop();tone.stop();void context.close();}catch{}}};
+  const siren=()=>{
+    if(context.state!=="running")return;
+    for(let i=0;i<6;i++){
+      const osc=context.createOscillator(),gain=context.createGain(),start=context.currentTime+i*.18;
+      osc.type="square";osc.frequency.value=i%2===0?520:760;
+      gain.gain.setValueAtTime(.001,start);gain.gain.linearRampToValueAtTime(.055,start+.02);gain.gain.exponentialRampToValueAtTime(.001,start+.16);
+      osc.connect(gain).connect(sfx);osc.start(start);osc.stop(start+.17);
+    }
+  };
+  return {resume:async()=>{if(context.state==="suspended")await context.resume();},set,cue,siren,dispose:()=>{try{drone.stop();tone.stop();void context.close();}catch{}}};
 }
 
 function FriendPortrait({sprites,name}:{sprites?:GenerationSprites;name:string}){
@@ -585,6 +607,23 @@ function drawWorld(ctx:CanvasRenderingContext2D,t:number,lights:boolean,lightsFl
 }
 
 function shuffle<T>(arr:T[],seed:number){const a=[...arr];let s=seed>>>0;for(let i=a.length-1;i>0;i--){s=(Math.imul(s,1664525)+1013904223)>>>0;const j=s%(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;}
+function makePuzzleTargets(seed:number):PuzzleTargets{
+  const lamp=shuffle([1,2,3,4],seed+11),hatch=shuffle([1,2,3,4],seed+29);
+  const pond=[0,1,2].map((_,i)=>(seed+i*7)%4);
+  const shrine=shuffle(["MOON","MASK","SEED","HATCH"],seed+47);
+  const fuse=[15,20,30][Math.abs(seed)%3];
+  const ward=[0,1,2,3].map(i=>((seed>>(i+1))&1)===1);
+  if(ward.filter(Boolean).length<2){ward[0]=true;ward[2]=true;}
+  return {lamp,hatch,pond,shrine,fuse,ward};
+}
+function sabotageMeta(zone:ZoneKey){
+  if(zone==="lamp")return {kind:"blackout" as const,label:"GRID OVERLOAD",seconds:45,fatalText:"The Lamp Court relay exploded in the blackout. Garden containment failed."};
+  if(zone==="shed")return {kind:"overload" as const,label:"GENERATOR OVERLOAD",seconds:42,fatalText:"The Tool Shed service circuit blew before anyone isolated it. The Garden went dead."};
+  if(zone==="hatch")return {kind:"breach" as const,label:"HATCH BREACH",seconds:40,fatalText:"The Central Hatch breached before the bolts were restored."};
+  if(zone==="pond")return {kind:"corruption" as const,label:"REFLECTION COLLAPSE",seconds:52,fatalText:"Moon Pond's reflection ward collapsed and containment failed."};
+  if(zone==="shrine")return {kind:"corruption" as const,label:"SHRINE CORRUPTION",seconds:50,fatalText:"The Old Shrine ward decayed past recovery."};
+  return {kind:"perimeter" as const,label:"PERIMETER FAILURE",seconds:48,fatalText:"The Memorial Ward failed and the perimeter opened."};
+}
 
 export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const canvas=useRef<HTMLCanvasElement>(null);
