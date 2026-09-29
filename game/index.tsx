@@ -55,13 +55,18 @@ const LANDMARKS=[
   {name:"Old Well",p:{x:930,y:1530}},
   {name:"South Arch",p:{x:1650,y:1920}},
 ] as const;
+const ROAD_LIGHTS=[
+  {x:1320,y:1710},{x:1410,y:1460},{x:1490,y:1240},{x:1280,y:1040},
+  {x:1030,y:990},{x:820,y:950},{x:1750,y:1100},{x:1980,y:1170},
+  {x:2180,y:1235},{x:1760,y:820},{x:1970,y:660},{x:2170,y:520},
+] as const;
 const BOT_NAMES=["Moth","Reed","Vale","Ash","Ivy"];
 const NPC_TOKEN_IDS=[334130n,334131n,334132n,334133n,334134n];
 const PERSONALITIES:Personality[]=["careful","nervous","direct","quiet","watchful"];
 const DEFAULT_SETTINGS:GameSettings={graphics:"high",fps:60,cameraZoom:1,brightness:1,fog:55,grain:22,master:75,music:42,ambience:62,sfx:78,reducedMotion:false,screenShake:true,hints:true};
 const TUTORIAL_STEPS=[
   {eyebrow:"01 · MOVE + EXPLORE",title:"Learn the Garden",body:"Use WASD, Arrow keys, or tap the ground. The Garden is larger now, trees and rocks block movement, and M opens the full map.",key:"WASD / TAP · M MAP"},
-  {eyebrow:"02 · DO CHORES",title:"Build Your Alibi",body:"Visit the four marked containment sites. When the action button says WORK, press E. Watch which Keepers work nearby and remember their routes.",key:"E · INTERACT"},
+  {eyebrow:"02 · DO CHORES",title:"Build Your Alibi",body:"Visit the six marked containment stations. When the action button says WORK, press E. Watch which Keepers work nearby and remember their routes.",key:"E · INTERACT"},
   {eyebrow:"03 · RF NIGHT MARKET",title:"Gear Has a Cost",body:"Press G to open the shop. Flashlights, batteries, UV scans, flares and wards use simulated RF. The flashlight drains while switched on, so conserve it and use a Battery Pack when empty.",key:"G SHOP · F FLASHLIGHT"},
   {eyebrow:"04 · REPORT BODIES",title:"Death Leaves Evidence",body:"A murdered Keeper freezes where they fell. Their body stays on the ground with a faint spirit beside it. Stand close and press R to call a meeting.",key:"R · REPORT"},
   {eyebrow:"05 · MEET + VOTE",title:"Everyone Has a Story",body:"Read every Keeper report, compare it with system evidence and what you personally saw, then vote. The Mimic also speaks and can lie. A wrong vote makes the night more dangerous.",key:"READ · COMPARE · VOTE"},
@@ -496,6 +501,7 @@ function drawWorld(ctx:CanvasRenderingContext2D,t:number,lights:boolean,lightsFl
   for(const r of ROCK_POINTS){ctx.fillStyle="#293029";ctx.beginPath();ctx.ellipse(r.x,r.y,31,20,.2,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#454e45";ctx.stroke();}
   drawLandmarks(ctx);
   drawTaskStructures(ctx);
+  ROAD_LIGHTS.forEach((lp,i)=>drawStreetLamp(ctx,lp,lights,lightsFlickering,t,i+20));
 
   drawLampCourt(ctx,lights,lightsFlickering,t);
   drawPond(ctx,t);
@@ -751,7 +757,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
         frameSync.current++;
         if(frameSync.current%8===0)setAgents([...moved]);
 
-        // Hidden saboteur: patient, plausible, and not automatically exposed by evidence.
+        // Hidden Mimic: patient, plausible, and not automatically exposed by evidence.
         if(role==="friend"){
           const currentAgents=agentsRef.current;
           const mimic=currentAgents.find(a=>a.id==="mimic");
@@ -875,8 +881,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     pos.current={...START};
     const bots=BOT_NAMES.map((name,i):Agent=>({id:"bot"+i,name,p:randPoint(i*31+7),alive:true,color:["#526858","#6b5f52","#4b606a","#6a4f55","#596149"][i],target:ZONES[ALL_ZONES[i%4]].p,speed:74+i*3,task:ALL_ZONES[i%4],cooldown:0,suspicion:0,tokenId:NPC_TOKEN_IDS[i],choreIndex:i%4,workUntil:0,lastZone:ALL_ZONES[i%4],lastAction:"heading to "+ZONES[ALL_ZONES[i%4]].name,personality:PERSONALITIES[i],reported:false,lastSeenName:null,lastSeenZone:ALL_ZONES[i%4],lastSeenAt:0}));
     if(chosen==="friend"){const culprit=PROFILE.seed%BOT_NAMES.length;bots[culprit]={...bots[culprit],id:"mimic",name:bots[culprit].name};}
-    agentsRef.current=bots;setAgents(bots);setEvidence(["One of these five Friend Keepers is the saboteur. Watch routes, chores and contradictions — nobody gets a perfect clue."]);setTestimony([]);setRoundNotes(["Night began. Five Keepers entered the Garden."]);setRfEarned(0);setRewardDisplay(0);setFlashlightOn(false);
-    setMessage("You are a FRIEND. Complete containment tasks, but your real goal is to identify and eject the hidden saboteur.");
+    agentsRef.current=bots;setAgents(bots);setEvidence(["One of these five Friend Keepers is the Mimic. Watch routes, chores and contradictions — nobody gets a perfect clue."]);setTestimony([]);setRoundNotes(["Night began. Five Keepers entered the Garden."]);setRfEarned(0);setRewardDisplay(0);setFlashlightOn(false);
+    setMessage("You are a FRIEND. Complete containment tasks, but your real goal is to identify and eject the hidden Mimic.");
     setTimeout(()=>{setPhase("play");if(!tutorialSeen){setTutorialStep(0);setMenu("tutorial");}},2200);
   }
 
@@ -1096,7 +1102,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     }}/>
 
     {phase==="play"&&<>
-      <div className="hud mission"><span>{roleLabel} // {clock}</span><b>{role==="friend"?"KEEP THE HATCH SEALED":"BECOME ONE OF THEM"}</b><small>{role==="friend"?tasksDone+"/"+ALL_ZONES.length+" tasks · identify the saboteur":aliveAgents.length+" Keepers remain"}</small></div>
+      <div className="hud mission"><span>{roleLabel} // {clock}</span><b>{role==="friend"?"KEEP THE HATCH SEALED":"BECOME ONE OF THEM"}</b><small>{role==="friend"?tasksDone+"/"+ALL_ZONES.length+" tasks · identify the Mimic":aliveAgents.length+" Keepers remain"}</small></div>
       <div className="hud statusbox"><b>{lights?"LIGHTS ONLINE":"BLACKOUT"}</b><span>{hatchPanic?"HATCH SABOTAGED":"Containment stable"}</span></div>
       <div className="economy-hud"><b>{snapshot?.mode==="chain"?"FRIEND WALLET":"PREVIEW"} RF {formatRF(snapshot?.rfBalance)}</b><span>Spent {rfSpent.toFixed(2)} · Win +0.15–0.20* simulated</span></div>
       <div className="friend-badge"><b>FRIEND #{friendId.toString()}</b><span>{PROFILE.character} · {PROFILE.scenery} · {PROFILE.floor} · Gen {PROFILE.generation}</span></div>
@@ -1119,7 +1125,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       {toastOpen&&<div className="message toast-message">{message}</div>}
     </>}
 
-    {phase==="title"&&<div className="overlay"><div className="title-card"><span>RARE FRIENDS SOCIAL HORROR · FRIEND #{friendId.toString()}</span><h1>THE HATCH</h1><p>One of the Keepers is a hidden saboteur. It will kill the team unless you identify it in a meeting.</p><div className="pitch"><b>MASK</b><span>The Mimic can copy identities.</span><b>GARDEN</b><span>A realistic night map built around your NFT.</span><b>HATCH</b><span>Keep it sealed until sunrise.</span></div><button onClick={start}>START DEDUCTION NIGHT</button><button onClick={()=>{setTutorialStep(0);setMenu("tutorial");}}>HOW TO PLAY</button><button onClick={()=>setMenu("settings")}>SETTINGS</button><small>WASD / arrows · E use · R report · F light · M map · G shop</small></div></div>}
+    {phase==="title"&&<div className="overlay"><div className="title-card"><span>RARE FRIENDS SOCIAL HORROR · FRIEND #{friendId.toString()}</span><h1>THE HATCH</h1><p>One of the Keepers is a hidden Mimic. It will kill the team unless you identify it in a meeting.</p><div className="pitch"><b>MASK</b><span>The Mimic can copy identities.</span><b>GARDEN</b><span>A realistic night map built around your NFT.</span><b>HATCH</b><span>Keep it sealed until sunrise.</span></div><button onClick={start}>START DEDUCTION NIGHT</button><button onClick={()=>{setTutorialStep(0);setMenu("tutorial");}}>HOW TO PLAY</button><button onClick={()=>setMenu("settings")}>SETTINGS</button><small>WASD / arrows · E use · R report · F light · M map · G shop</small></div></div>}
 
     {phase==="role"&&<div className={"overlay role-card "+role}><div><span>YOUR ROLE</span><h1>{role==="friend"?"FRIEND":"THE MIMIC"}</h1><p>{message}</p></div></div>}
 
