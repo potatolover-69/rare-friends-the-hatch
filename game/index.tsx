@@ -306,11 +306,12 @@ function drawHatch(ctx:CanvasRenderingContext2D,hatchPanic:boolean,t:number){
   ctx.restore();
 }
 
-function drawWorld(ctx:CanvasRenderingContext2D,t:number,lights:boolean,hatchPanic:boolean,bodies:Agent[]){
+function drawWorld(ctx:CanvasRenderingContext2D,t:number,lights:boolean,hatchPanic:boolean,bodies:Agent[],quality:GameSettings["graphics"]){
   const bg=ctx.createLinearGradient(0,0,0,WORLD.height);bg.addColorStop(0,"#0d1512");bg.addColorStop(.58,"#111a14");bg.addColorStop(1,"#060a08");ctx.fillStyle=bg;ctx.fillRect(0,0,WORLD.width,WORLD.height);
 
   ctx.fillStyle="#152018";ctx.fillRect(80,80,WORLD.width-160,WORLD.height-140);
-  for(let i=0;i<280;i++){
+  const detail=quality==="low"?.42:quality==="medium"?.68:quality==="high"?1:1.28;
+  for(let i=0;i<Math.floor(280*detail);i++){
     const x=100+((i*193+PROFILE.seed)%1900),y=100+((i*317+PROFILE.seed*3)%1190);
     const h=5+(i%7);ctx.strokeStyle=i%4===0?"rgba(111,136,104,.20)":"rgba(54,77,57,.24)";ctx.lineWidth=1;
     ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.sin(i)*2,y-h);ctx.stroke();
@@ -322,8 +323,8 @@ function drawWorld(ctx:CanvasRenderingContext2D,t:number,lights:boolean,hatchPan
   ctx.strokeStyle="#2f3931";ctx.lineWidth=5;ctx.strokeRect(86,86,WORLD.width-172,WORLD.height-152);
   for(let x=105;x<WORLD.width-95;x+=52){ctx.fillStyle="#151b17";ctx.fillRect(x,80,4,50);ctx.fillRect(x,WORLD.height-118,4,48);}
 
-  for(let i=0;i<24;i++){const p=randPoint(i+13);drawTree(ctx,p,t,i+3);}
-  for(let i=0;i<18;i++){drawBush(ctx,{x:170+((i*229)%1740),y:180+((i*401)%1010)},i+11);}
+  for(let i=0;i<Math.floor(24*detail);i++){const p=randPoint(i+13);drawTree(ctx,p,t,i+3);}
+  for(let i=0;i<Math.floor(18*detail);i++){drawBush(ctx,{x:170+((i*229)%1740),y:180+((i*401)%1010)},i+11);}
 
   drawLampCourt(ctx,lights,t);
   drawPond(ctx,t);
@@ -339,7 +340,7 @@ function drawWorld(ctx:CanvasRenderingContext2D,t:number,lights:boolean,hatchPan
     ctx.save();ctx.translate(b.p.x,b.p.y);ctx.rotate(-.7);ctx.fillStyle="#262a25";ctx.fillRect(-28,-8,56,16);ctx.fillStyle="#5e645c";ctx.beginPath();ctx.arc(-31,0,10,0,Math.PI*2);ctx.fill();ctx.restore();
   }
 
-  for(let i=0;i<8;i++){
+  for(let i=0;i<Math.max(2,Math.floor(8*detail));i++){
     const x=((t*.018+i*330)%2600)-250,y=180+i*145;
     const fog=ctx.createRadialGradient(x,y,10,x,y,180);fog.addColorStop(0,"rgba(190,205,195,.035)");fog.addColorStop(1,"rgba(190,205,195,0)");
     ctx.fillStyle=fog;ctx.beginPath();ctx.ellipse(x,y,220,70,0,0,Math.PI*2);ctx.fill();
@@ -390,7 +391,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const [flashlightOn,setFlashlightOn]=useState(false);
   const [testimony,setTestimony]=useState<{name:string;text:string}[]>([]);
   const [busy,setBusy]=useState(false);
-  const [muted,setMuted]=useState(true);
+  const [muted,setMuted]=useState(false);
   const [settings,setSettings]=useState<GameSettings>(DEFAULT_SETTINGS);
   const [settingsTab,setSettingsTab]=useState<SettingsTab>("graphics");
   const [roundNotes,setRoundNotes]=useState<string[]>([]);
@@ -400,6 +401,9 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const bodies=agents.filter(a=>!a.alive);
   const tasksDone=Object.values(tasks).filter(Boolean).length;
   const nearestAlive=aliveAgents.reduce<Agent|null>((best,a)=>!best||dist(pos.current,a.p)<dist(pos.current,best.p)?a:best,null);
+  const nearbyBody=bodies.find(b=>!b.reported&&near(pos.current,b.p,115));
+  const nearbyZone=ALL_ZONES.find(z=>near(pos.current,ZONES[z].p,125));
+  const contextAction=nearbyBody?"REPORT "+nearbyBody.name:nearbyZone&&!tasks[nearbyZone]?"WORK · "+ZONES[nearbyZone].name:!lights&&near(pos.current,ZONES.lamp.p,130)?"RESTORE LIGHTS":hatchPanic&&near(pos.current,ZONES.hatch.p,140)?"STABILIZE HATCH":"INTERACT";
 
   function updateAgents(updater:(xs:Agent[])=>Agent[]){
     const next=updater(agentsRef.current);
@@ -571,7 +575,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       const shakeX=shaking?Math.sin(now*.11)*5:0,shakeY=shaking?Math.cos(now*.13)*4:0;
       ctx.clearRect(0,0,VIEW.width,VIEW.height);ctx.save();ctx.scale(zoom,zoom);ctx.translate(-cam.current.x+shakeX/zoom,-cam.current.y+shakeY/zoom);
       const renderAgents=agentsRef.current;
-      drawWorld(ctx,settings.reducedMotion?0:now,lights,hatchPanic,renderAgents.filter(a=>!a.alive&&!a.reported));
+      drawWorld(ctx,settings.reducedMotion?0:now,lights,hatchPanic,renderAgents.filter(a=>!a.alive&&!a.reported),settings.graphics);
       renderAgents.forEach(a=>{const sp=npcSprites[String(a.tokenId)];if(sp)drawNpcFriend(ctx,sp,a,now);else drawKeeper(ctx,a,now);drawChoreEffect(ctx,a,now);});
       ctx.restore();
 
@@ -796,7 +800,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       {settings.hints&&role==="friend"&&<div className="hint-chip">{tasksDone<4?"NEXT · "+ZONES[ALL_ZONES.find(z=>!tasks[z])||"hatch"].name:"Watch routes · compare testimony · eject the Mimic"}</div>}
       {role==="friend"&&<div className="task-list">{ALL_ZONES.map(z=><span key={z} className={tasks[z]?"done":""}>{tasks[z]?"✓":"□"} {ZONES[z].name}</span>)}</div>}
       <div className="bottom-actions">
-        <button onClick={interact}>{role==="mimic"?"KILL / USE":"USE"} <small>E</small></button>
+        <button className={contextAction!=="INTERACT"?"context-ready":""} onClick={interact}>{role==="mimic"?"KILL / USE":contextAction} <small>E</small></button>
         <button onClick={reportBody}>REPORT <small>R</small></button>
         <button disabled={emergencyLeft<=0} onClick={emergency}>MEETING {emergencyLeft}</button>
         <button onClick={()=>setMenu("inventory")}>SHOP / GEAR</button>{inventory.flashlight>0&&<button onClick={()=>setFlashlightOn(v=>!v)}>FLASHLIGHT {flashlightOn?"ON":"OFF"} <small>F</small></button>}{inventory.flare>0&&<button onClick={useFlare}>USE FLARE ×{inventory.flare}</button>}{inventory.ward>0&&<button onClick={useWard}>USE WARD ×{inventory.ward}</button>}
