@@ -191,6 +191,17 @@ function FriendPortrait({sprites,name}:{sprites?:GenerationSprites;name:string})
   return <canvas ref={ref} width={96} height={112} className="friend-portrait-canvas" aria-label={name+" Rare Friend portrait"}/>;
 }
 
+function TutorialScene({step,sprites,friendId}:{step:number;sprites:GenerationSprites|null;friendId:bigint}){
+  if(step===0)return <div className="manual-demo movement-demo"><div className="manual-friend"><FriendPortrait sprites={sprites||undefined} name={"Friend #"+friendId.toString()}/><small>YOU</small></div><div className="key-cluster"><i>W</i><i>A</i><i>S</i><i>D</i></div><div className="trail"><i/><i/><i/><i/></div></div>;
+  if(step===1)return <div className="manual-demo map-demo"><svg viewBox="0 0 340 170" aria-hidden="true"><path d="M35 140 L120 92 L175 110 L245 54 L310 76"/><path d="M120 92 L76 38 M175 110 L228 142"/><circle cx="35" cy="140" r="6"/><circle cx="120" cy="92" r="7"/><circle cx="175" cy="110" r="7"/><circle cx="245" cy="54" r="7"/><circle cx="310" cy="76" r="7"/></svg><span className="map-you">YOU</span><b>KEEPERS ARE NOT SHOWN</b></div>;
+  if(step===2)return <div className="manual-demo puzzle-demo"><div className="relay-strip">{[1,2,3,4].map((n,i)=><i key={n} style={{"--d":(i*.28)+"s"} as CSSProperties}>{n}</i>)}</div><small>WATCH THE SIGNAL · REPEAT IT</small></div>;
+  if(step===3)return <div className="manual-demo gear-demo">{SHOP_ITEMS.slice(0,4).map(item=><div key={item.kind}><i>{item.icon}</i><span>{item.name}</span><small>{item.price}</small></div>)}</div>;
+  if(step===4)return <div className="manual-demo sabotage-demo"><div className="mini-lamp"/><div className="mini-alert"><span>GRID OVERLOAD</span><b>00:38</b><i/></div><small>IGNORE IT → ROUND LOST</small></div>;
+  if(step===5)return <div className="manual-demo report-demo"><div className="body-mark"><i/><i/></div><div className="ghost-mark"/><kbd>R</kbd><span>REPORT</span></div>;
+  if(step===6)return <div className="manual-demo testimony-demo"><div><b>MOTH</b><span>“I crossed Lamp Court before the alarm.”</span></div><div><b>ASH</b><span>“I saw someone double back near the pond.”</span></div><small>CLUES NARROW THE FIELD — THEY DO NOT NAME THE MIMIC</small></div>;
+  return <div className="manual-demo win-demo"><div className="sun-mark"/><div className="seal-mark">✓</div><b>6/6 STATIONS</b><span>MIMIC EXPOSED</span><small>MAKE IT TO SUNRISE</small></div>;
+}
+
 function drawFriend(ctx:CanvasRenderingContext2D,sprites:GenerationSprites,p:Point,facing:SpriteFacing,walking:boolean,frame:number,side:"left"|"right"){
   const rows=spriteFrame(sprites,facing,walking,frame,side).frame.rows;
   const scale=5,left=Math.round(p.x)-40,top=Math.round(p.y)-80;
@@ -1413,13 +1424,20 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       <button className="map-close" onClick={()=>setMenu(null)}>RETURN TO GARDEN · M</button>
     </div></div>}
 
-    {menu==="tutorial"&&<div className="tutorial-overlay" role="dialog" aria-modal="true" aria-label="How to play"><div className="tutorial-card" key={tutorialStep}>
-      <button className="tutorial-close" onClick={()=>{setTutorialSeen(true);setMenu(null);}}>×</button>
-      <div className="tutorial-progress">{TUTORIAL_STEPS.map((_,i)=><i key={i} className={i<=tutorialStep?"active":""}/>)}</div>
-      <span>{TUTORIAL_STEPS[tutorialStep].eyebrow}</span><h2>{TUTORIAL_STEPS[tutorialStep].title}</h2><p>{TUTORIAL_STEPS[tutorialStep].body}</p>
-      <div className={"tutorial-visual step-"+tutorialStep}><div className="tutorial-friend">FRIEND</div><div className="tutorial-icon">{["↗","MAP","✓","RF","!","☠","?","☀"][tutorialStep]}</div><div className="tutorial-key">{TUTORIAL_STEPS[tutorialStep].key}</div></div>
-      <div className="tutorial-actions"><button disabled={tutorialStep===0} onClick={()=>setTutorialStep(v=>Math.max(0,v-1))}>BACK</button>{tutorialStep<TUTORIAL_STEPS.length-1?<button onClick={()=>setTutorialStep(v=>Math.min(TUTORIAL_STEPS.length-1,v+1))}>NEXT</button>:<button onClick={()=>{setTutorialSeen(true);setMenu(null);setMessage("Tutorial complete. Use M for the map and G for the Night Market.");}}>ENTER THE GARDEN</button>}</div>
-    </div></div>}
+    {menu==="tutorial"&&<div className="tutorial-overlay field-manual-overlay" role="dialog" aria-modal="true" aria-label="Keeper field manual">
+      <div className="field-manual" key={tutorialStep}>
+        <header className="manual-header"><div><span>KEEPER FIELD MANUAL</span><b>GARDEN UNIT 06 · NIGHT PROTOCOL</b></div><em>FRIEND #{friendId.toString()}</em><button onClick={()=>{setTutorialSeen(true);setMenu(null);}} aria-label="Close field manual">×</button></header>
+        <aside className="manual-index">{TUTORIAL_STEPS.map((step,i)=><button key={step.title} className={i===tutorialStep?"active":i<tutorialStep?"done":""} onClick={()=>setTutorialStep(i)}><i>{String(i+1).padStart(2,"0")}</i><span>{step.title}</span></button>)}</aside>
+        <main className="manual-page">
+          <div className="manual-kicker"><span>{TUTORIAL_STEPS[tutorialStep].eyebrow}</span><em>{tutorialStep+1} / {TUTORIAL_STEPS.length}</em></div>
+          <h2>{TUTORIAL_STEPS[tutorialStep].title}</h2>
+          <p>{TUTORIAL_STEPS[tutorialStep].body}</p>
+          <TutorialScene step={tutorialStep} sprites={sprites} friendId={friendId}/>
+          <div className="manual-control"><span>CONTROL</span><kbd>{TUTORIAL_STEPS[tutorialStep].key}</kbd></div>
+          <footer className="manual-actions"><button disabled={tutorialStep===0} onClick={()=>setTutorialStep(v=>Math.max(0,v-1))}>← PREVIOUS</button><span>Page {String(tutorialStep+1).padStart(2,"0")}</span>{tutorialStep<TUTORIAL_STEPS.length-1?<button className="primary" onClick={()=>setTutorialStep(v=>Math.min(TUTORIAL_STEPS.length-1,v+1))}>NEXT PAGE →</button>:<button className="primary" onClick={()=>{setTutorialSeen(true);setMenu(null);setMessage("Field manual closed. Survive the night.");}}>ENTER GARDEN →</button>}</footer>
+        </main>
+      </div>
+    </div>}
 
     {menu==="settings"&&<div className="settings-backdrop" role="dialog" aria-modal="true" aria-label="Settings">
       <aside className="settings-panel">
