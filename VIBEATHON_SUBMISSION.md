@@ -4,18 +4,18 @@
 
 **One sentence:** A social-deduction horror game where your verified Rare Friend works through a haunted Garden, watches other Friend Keepers do real chores, survives sabotage and murders, compares their testimony in meetings, and votes out the hidden Mimic while optional simulated-RF gear demonstrates an economy loop.
 
-- **▶ Playable preview:** https://potatolover-69.github.io/rare-friends-the-hatch/
+- **▶ Playable preview:** https://rare-friends-the-hatch.jamiecrypto0000.workers.dev/
 - **Source:** https://github.com/potatolover-69/rare-friends-the-hatch
 - **Reviewed snapshot:** https://github.com/potatolover-69/rare-friends-the-hatch/tree/9296cbbe55d49b631327c601d2d8ca4771c61680
 - **Requirements:** browser wallet on **Robinhood mainnet (4663)** holding a hardwired Rare Friends Generations NFT (**generation ≥ 1**). FriendSDK verifies ownership and lets the player choose the Friend.
 
 ## What did you build?
 
-**The Hatch** is a 960 × 640 social-deduction horror game set in a realistic-feeling night Garden. Your selected Rare Friend is the playable character. Five Keeper characters move between Lamp Court, Moon Pond, Central Hatch and Old Shrine, stop to perform chores and build alibis. One Keeper is secretly the Mimic.
+**The Hatch** is a 960 × 640 social-deduction horror game set in a realistic-feeling night Garden. Your selected Rare Friend is the playable character. Five Keeper characters roam a larger Garden between six puzzle stations — Lamp Court, Moon Pond, Central Hatch, Old Shrine, Tool Shed and Memorial Ward — stop to perform chores and build alibis. One Keeper is secretly the Mimic.
 
 The Mimic usually behaves like a normal worker so it is difficult to identify. It takes occasional detours, sabotages the lights or Hatch, kills only when isolated, then changes route. Bodies can be reported by the player or discovered by another Keeper.
 
-Meetings are the deduction game: every survivor gives a report based on what it was doing and who it remembers seeing. The Mimic gives testimony too, but can lie and redirect suspicion. The player compares testimony, system logs, routes and contradictions before voting.
+Meetings are the deduction game: a body report triggers a cinematic statement sequence where surviving Keepers are shown one-by-one on a camera-style panel and explain what they were doing and who they remember seeing. The Mimic gives testimony too, but can lie and redirect suspicion. The player compares testimony, system logs, routes and contradictions before voting.
 
 ## How does it use Rare Friends?
 
@@ -26,9 +26,20 @@ Meetings are the deduction game: every survivor gives a report based on what it 
 
 ## Play it
 
-Open **https://potatolover-69.github.io/rare-friends-the-hatch/**, connect a wallet on Robinhood mainnet and choose a qualifying Generations Friend.
+Open **https://rare-friends-the-hatch.jamiecrypto0000.workers.dev/**, connect a wallet on Robinhood mainnet and choose a qualifying Generations Friend.
 
 **Controls:** WASD / arrows move · click/tap moves toward a point · **E** interact / perform chore · **R** report a nearby body · **F** toggle a purchased flashlight · **M** open the full Garden map · **G** open the RF Night Market · **Meeting** calls one emergency meeting.
+
+### Puzzle stations
+
+- **Lamp Court — Restore the Circuit:** connect relay nodes in the maintenance order; sabotage makes the street lights flicker and die.
+- **Moon Pond — Align the Reflection:** rotate three mirrors so the animated moon reflection converges on the ward.
+- **Central Hatch — Lock the Bolts:** follow the carved compass sequence to reseal containment.
+- **Old Shrine — Arrange the Offering:** enter the ritual symbols in the warding order.
+- **Tool Shed — Replace the Fuse:** identify and install the correct service fuse and repair kit.
+- **Memorial Ward — Re-anchor the Boundary:** toggle the correct memorial stones to restore the perimeter seal.
+
+Completed stations can be sabotaged and become unstable again, forcing the player to revisit and solve them a second time.
 
 ### How a round works
 
@@ -51,12 +62,12 @@ Open **https://potatolover-69.github.io/rare-friends-the-hatch/**, connect a wal
 | Emergency Flare | 0.30 RF | Restores Garden lighting immediately |
 | Ward | 0.10 RF | Cancels active Hatch sabotage |
 
-A successful round displays a **small simulated +0.15 RF reward, increased to +0.20 RF when all four chores are completed**. Purchases use the FriendSDK preview's supported buy / play / settle path so the prototype demonstrates **Token Activity**, while the optional gear + victory reward loop demonstrates **Economy Potential**.
+A successful round displays a **small simulated +0.15 RF reward, increased to +0.20 RF when all six containment puzzles are completed**. Purchases use the FriendSDK preview's supported buy / play / settle path so the prototype demonstrates **Token Activity**, while the optional gear + victory reward loop demonstrates **Economy Potential**.
 
 ### Exploration, onboarding and presentation
 
 - The Garden is expanded to a 3000 × 2100 scrolling world with named landmarks, longer routes and collision against tree trunks and rocks.
-- A clickable minimap plus a full **M** map shows the player, four chore sites and exploration landmarks without revealing Keeper positions.
+- A clickable minimap plus a full **M** map shows the player, six puzzle stations, route lines, water/landmark context and exploration landmarks without revealing Keeper positions.
 - First-time players receive a six-step animated tutorial covering movement, chores, the RF shop, flashlight batteries, reporting bodies, meeting testimony, voting and winning.
 - Temporary gameplay messages use short non-blocking toast notifications instead of covering the action bar.
 - Murdered Keepers stop moving, remain in a corpse pose and display a faint transparent spirit beside the body.
