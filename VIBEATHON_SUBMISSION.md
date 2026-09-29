@@ -50,16 +50,28 @@ Completed stations can be sabotaged and become unstable again, forcing the playe
 5. Compare statements with system evidence and what you personally saw.
 6. Vote. Eject the Mimic to win; eject the wrong Friend and the night continues.
 
+## Final round rules
+
+- The six-minute round clock is **wall-clock based**: it continues during puzzles, meetings, menus, tab switches and temporary browser throttling. Returning to the tab immediately reconciles the real elapsed time.
+- Winning requires **both** objectives before sunrise: secure all six containment stations **and** correctly identify the Mimic.
+- Sabotage selects a random station while avoiding the most recent locations. Only one catastrophic sabotage is active at a time.
+- Every sabotage has a repair deadline. An ignored Lamp Court or Tool Shed electrical failure can blow the circuit; ignored Hatch, Pond, Shrine or Memorial failures also end the round.
+- Lamp Court failure flickers the route streetlights before a near-total blackout. Every Keeper starts with a weak emergency flashlight charge so the base game remains completable without an RF purchase.
+- Body reports trigger a red/blue emergency warning followed by **manual** Keeper statements. The player chooses when to advance, skip to voting, or keep reading.
+- Murder scenes generate ambiguous two-suspect route clues; they narrow the deduction without naming the killer.
+- The Mimic and testimony wording are randomized each round, and puzzle targets are rerolled so repeated playthroughs do not expose a fixed answer.
+- A wrong vote does not eliminate the innocent Friend; play continues with the message that the Mimic is still among the Keepers.
+
 ## Simulated RF economy
 
 **All purchases, sinks and rewards in this MVP are simulated concepts and are labelled as such. No claim is made that the live Rare Friends ecosystem currently burns or distributes RF this way.** The deduction game remains playable without buying gear.
 
 | Item | Simulated cost | Utility |
 |---|---:|---|
-| Flashlight | 0.10 RF | Warm directional beam with a finite charge; toggle with F |
+| Flashlight | 0.10 RF | Full-charge replacement for the free weak emergency torch; finite charge, toggle with F |
 | Battery Pack | 0.10 RF | Consumable refill that restores flashlight charge to 100% |
 | UV Scanner | 0.20 RF | Adds an inconsistency clue during meetings |
-| Emergency Flare | 0.30 RF | Restores Garden lighting immediately |
+| Emergency Flare | 0.30 RF | Provides temporary emergency lighting; does not repair the sabotaged circuit |
 | Ward | 0.10 RF | Cancels active Hatch sabotage |
 
 A successful round displays a **small simulated +0.15 RF reward, increased to +0.20 RF when all six containment puzzles are completed**. Purchases use the FriendSDK preview's supported buy / play / settle path so the prototype demonstrates **Token Activity**, while the optional gear + victory reward loop demonstrates **Economy Potential**.
