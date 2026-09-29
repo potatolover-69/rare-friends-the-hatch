@@ -35,14 +35,22 @@ The Mimic can sabotage a secured station, marking it unstable and forcing the pu
 
 The Garden now uses global moonlight and local environmental lamps instead of a player-centered darkness bubble. Street lamps normally illuminate the routes. A Lamp Court sabotage makes them visibly flicker before the Garden falls into a readable blackout. A purchased flashlight adds a directional beam, and rare pairs of eyes can briefly appear in the darkness before vanishing.
 
+## Round pressure
+
+The round now runs on an absolute six-minute wall clock. It does not pause for puzzles, shops, maps, meetings or browser tab switches. The player must secure all six stations **and** expose the Mimic before sunrise.
+
+Sabotage is randomized across the Garden while avoiding recent repeat locations. Only one critical sabotage is active at a time, but each has a visible countdown and a catastrophic fail state if ignored. Lamp Court and Tool Shed failures can destroy the electrical system; Hatch, Pond, Shrine and Memorial failures can break containment.
+
+Body reports use a red/blue emergency siren transition. Keeper testimony is manual-paced rather than auto-skipped, clues narrow the suspect pool without directly revealing the Mimic, and both the Mimic identity and statement variants change between rounds.
+
 ## Prototype RF economy
 
 The Night Market includes optional utility sinks:
 
-- Flashlight — 0.10 RF
+- Field Flashlight — 0.10 RF (a weak emergency flashlight is provided free at round start)
 - Battery Pack — 0.10 RF
 - UV Scanner — 0.20 RF
-- Emergency Flare — 0.30 RF
+- Emergency Flare — 0.30 RF (temporary light only; it does not repair a sabotaged circuit)
 - Ward — 0.10 RF
 
 Purchases exercise FriendSDK buy/play/settle activity. The intended burn/sink behavior and the displayed **+0.15 to +0.20 RF win reward are simulated MVP economy concepts**, not a claim that the live Rare Friends ecosystem currently burns or distributes RF this way. Flashlight charge drains while the light is on, making Battery Packs a repeat optional utility sink.
