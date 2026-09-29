@@ -86,7 +86,7 @@ await patch("src/owned-friends.ts", source => {
 await patch("scripts/dev-game.mjs", source => source
   .replace(
     "connect-src 'self' https://rpc.mainnet.chain.robinhood.com;",
-    "connect-src 'self' https://rpc.mainnet.chain.robinhood.com https://robinhood-rpc.publicnode.com;"
+    "media-src 'self' blob: https://raw.githubusercontent.com; connect-src 'self' https://rpc.mainnet.chain.robinhood.com https://robinhood-rpc.publicnode.com;"
   )
 );
 
