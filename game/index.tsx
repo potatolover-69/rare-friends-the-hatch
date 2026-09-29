@@ -1037,6 +1037,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     agentsRef.current=bots;setAgents(bots);
     setEvidence(["One of these five Friend Keepers is the Mimic. Evidence is intentionally incomplete — compare routes, timing and contradictions."]);
     setTestimony([]);setRoundNotes(["Night began. Five Keepers entered the Garden."]);setRfEarned(0);setRewardDisplay(0);setFlashlightOn(false);
+    setInventory(v=>v.flashlight>0?v:{...v,flashlight:1});setFlashlightBattery(v=>v>0?v:30);
     setMessage("You are a FRIEND. Secure all six stations and identify the Mimic before sunrise. The clock never pauses.");
     setTimeout(()=>{if(!roundEndedRef.current){setPhase("play");if(!tutorialSeen){setTutorialStep(0);setMenu("tutorial");}}},2200);
   }
@@ -1331,6 +1332,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     <canvas ref={canvas} width={VIEW.width} height={VIEW.height} className="game-canvas" onPointerDown={e=>{
       if(phase!=="play"||paused||menu)return;const r=e.currentTarget.getBoundingClientRect();destination.current={x:cam.current.x+((e.clientX-r.left)*VIEW.width/r.width)/settings.cameraZoom,y:cam.current.y+((e.clientY-r.top)*VIEW.height/r.height)/settings.cameraZoom};
     }}/>
+    {(phase==="play"||phase==="meeting")&&<div className={"round-clock-global "+(timer<=60?"urgent":"")}><span>ROUND CLOCK</span><b>{countdown}</b><small>never pauses</small></div>}
 
     {phase==="play"&&<>
       <div className="hud mission"><span>{roleLabel} // {clock} · {countdown} LEFT</span><b>{role==="friend"?"SECURE THE GARDEN + EXPOSE THE MIMIC":"BECOME ONE OF THEM"}</b><small>{role==="friend"?tasksDone+"/"+ALL_ZONES.length+" stations · "+(mimicCaught?"Mimic caught":"Mimic unknown"):aliveAgents.length+" Keepers remain"}</small></div>
@@ -1390,7 +1392,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     {menu==="inventory"&&<div className="shop-overlay" role="dialog" aria-modal="true" aria-label="RF Night Market"><section className="night-market">
       <header className="market-head"><div><span>GARDEN SUPPLY TERMINAL · MVP ECONOMY</span><h2>RF NIGHT MARKET</h2><p>Optional gear only. The deduction round can be completed without purchases.</p></div><button onClick={()=>setMenu(null)}>×</button></header>
       <div className="market-wallet"><div><small>{snapshot?.mode==="chain"?"FRIEND WALLET":"LOCAL PREVIEW"}</small><b>{formatRF(snapshot?.rfBalance)} RF</b></div><div><small>ROUND SPEND</small><b>{rfSpent.toFixed(2)} RF</b></div><div><small>WIN CONCEPT</small><b>+0.15–0.20 RF*</b></div></div>
-      <div className="market-note"><b>HOW IT WORKS</b><span>Buy gear → return to the Garden → use its HUD action. Flashlight charge drains while ON. Active sabotage timers keep running while this shop is open.</span></div>
+      {activeSabotage&&<div className="market-danger"><b>{activeSabotage.label}</b><span>{ZONES[activeSabotage.zone].name} fails in {sabotageSeconds}s — shopping does not pause it.</span></div>}
+      <div className="market-note"><b>HOW IT WORKS</b><span>Buy gear → return to the Garden → use its HUD action. Every Keeper starts with a weak 30% emergency flashlight charge; Night Market batteries and replacements extend it. Active sabotage timers keep running while this shop is open.</span></div>
       <div className="market-grid">{SHOP_ITEMS.map(item=><button key={item.kind} className="market-item" disabled={busy} onClick={()=>void buyItem(item.kind,item.units)}>
         <i>{item.icon}</i><div><small>{item.use}</small><b>{item.name}</b><p>{item.desc}</p></div><strong>{item.price}</strong>
       </button>)}</div>
