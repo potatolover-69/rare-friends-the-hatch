@@ -45,7 +45,7 @@ await patch("src/owned-friends.ts", source => {
   return source
     .replace(
       "const MAX_OWNED_FRIENDS = 10_000;",
-      "const MAX_OWNED_FRIENDS = 10_000;\nconst MAX_TRANSFER_BLOCKS_PER_QUERY = 10_000_000n;"
+      "const MAX_OWNED_FRIENDS = 10_000;\nconst MAX_TRANSFER_BLOCKS_PER_QUERY = 10_000_000n;\nconst CANONICAL_TRANSFER_START_BLOCK = 63_102_373n;"
     )
     .replace(
 `  const query = { address: deployment.generations, event: TRANSFER, fromBlock: 0n, toBlock: blockNumber, strict: true } as const;
@@ -58,8 +58,10 @@ await patch("src/owned-friends.ts", source => {
   });
   active();`,
 `  const pages = [];
+  const transferStartBlock = deployment.generations.toLowerCase() === GENERATION_SPRITE_MANIFEST.generations.toLowerCase()
+    ? CANONICAL_TRANSFER_START_BLOCK : 0n;
   try {
-    for (let fromBlock = 0n; fromBlock <= blockNumber; fromBlock += MAX_TRANSFER_BLOCKS_PER_QUERY) {
+    for (let fromBlock = transferStartBlock; fromBlock <= blockNumber; fromBlock += MAX_TRANSFER_BLOCKS_PER_QUERY) {
       active();
       const pageEnd = fromBlock + MAX_TRANSFER_BLOCKS_PER_QUERY - 1n;
       const toBlock = pageEnd < blockNumber ? pageEnd : blockNumber;
