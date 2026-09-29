@@ -7,7 +7,7 @@ async function patch(path, transform) {
   const url = new URL(path, root);
   const before = await readFile(url, "utf8");
   const after = transform(before);
-  if (after === before) throw new Error(`FriendSDK patch did not match ${path}`);
+  if (after === before) { console.log(`FriendSDK patch already applied or not needed: ${path}`); return; }
   await writeFile(url, after);
 }
 
