@@ -638,10 +638,17 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const facing=useRef<SpriteFacing>("up");
   const side=useRef<"left"|"right">("right");
   const lastKill=useRef(0);
-  const lastSabotage=useRef(0);
   const lastAutoReport=useRef(0);
   const agentsRef=useRef<Agent[]>([]);
   const frameSync=useRef(0);
+  const roundDeadlineRef=useRef(0);
+  const roundEndedRef=useRef(false);
+  const roundSeedRef=useRef(Math.floor(Math.random()*0x7fffffff));
+  const nextSabotageAtRef=useRef(0);
+  const sabotageHistoryRef=useRef<ZoneKey[]>([]);
+  const sabotageRef=useRef<ActiveSabotage|null>(null);
+  const mimicCaughtRef=useRef(false);
+  const puzzleTargetsRef=useRef<PuzzleTargets>(makePuzzleTargets(PROFILE.seed));
 
   const [sprites,setSprites]=useState<GenerationSprites|null>(null);
   const [npcSprites,setNpcSprites]=useState<Record<string,GenerationSprites>>({});
@@ -654,6 +661,10 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const [unstableTasks,setUnstableTasks]=useState<Record<ZoneKey,boolean>>({lamp:false,pond:false,hatch:false,shrine:false,shed:false,ward:false});
   const tasksRef=useRef(tasks);
   const [lastSabotagedZone,setLastSabotagedZone]=useState<ZoneKey|null>(null);
+  const [activeSabotage,setActiveSabotage]=useState<ActiveSabotage|null>(null);
+  const [sabotageSeconds,setSabotageSeconds]=useState(0);
+  const [mimicCaught,setMimicCaught]=useState(false);
+  const [milestone,setMilestone]=useState<string|null>(null);
   const [lights,setLights]=useState(true);
   const [hatchPanic,setHatchPanic]=useState(false);
   const [meetingReason,setMeetingReason]=useState("");
@@ -708,6 +719,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
 
   useEffect(()=>{agentsRef.current=agents;},[agents]);
   useEffect(()=>{tasksRef.current=tasks;},[tasks]);
+  useEffect(()=>{sabotageRef.current=activeSabotage;},[activeSabotage]);
+  useEffect(()=>{mimicCaughtRef.current=mimicCaught;},[mimicCaught]);
 
   useEffect(()=>{
     sound.current=createFriendSoundKit({muted:true});
@@ -728,14 +741,14 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   },[settings,muted]);
 
   useEffect(()=>{
-    if(phase!=="play"){setToastOpen(false);return;}
+    if(phase==="title"||phase==="won"||phase==="lost"){setToastOpen(false);return;}
     setToastOpen(true);
-    const t=setTimeout(()=>setToastOpen(false),2800);
+    const t=setTimeout(()=>setToastOpen(false),3200);
     return()=>clearTimeout(t);
   },[message,phase]);
 
   useEffect(()=>{
-    if(phase!=="play"||paused||menu||!flashlightOn)return;
+    if((phase!=="play"&&phase!=="meeting")||!flashlightOn)return;
     const t=setInterval(()=>setFlashlightBattery(v=>{
       if(v<=.3){
         setFlashlightOn(false);
@@ -745,7 +758,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       return Math.max(0,v-.3);
     }),250);
     return()=>clearInterval(t);
-  },[phase,paused,menu,flashlightOn]);
+  },[phase,flashlightOn]);
 
   useEffect(()=>{
     if(phase!=="won"){setRewardDisplay(0);return;}
@@ -761,27 +774,40 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   },[phase,rfEarned]);
 
   useEffect(()=>{
-    if(phase!=="meeting")return;
-    if(meetingStage==="report"){
-      const t=setTimeout(()=>{setSpeakerIndex(0);setMeetingStage("testimony");},1050);
-      return()=>clearTimeout(t);
-    }
-    if(meetingStage==="testimony"){
-      if(speakerIndex>=testimony.length-1){
-        const t=setTimeout(()=>setMeetingStage("vote"),1850);
-        return()=>clearTimeout(t);
+    if(!["role","play","meeting"].includes(phase))return;
+    const tick=()=>{
+      if(!roundDeadlineRef.current||roundEndedRef.current)return;
+      const left=Math.max(0,Math.ceil((roundDeadlineRef.current-Date.now())/1000));
+      setTimer(left);
+      if(left<=0){
+        const done=Object.values(tasksRef.current).every(Boolean);
+        const caught=mimicCaughtRef.current;
+        if(done&&caught)finish("won","Sunrise. Containment held and the Mimic was identified.");
+        else if(!done&&!caught)finish("lost","06:00 — containment is incomplete and the Mimic is still hidden. The night is lost.");
+        else if(!done)finish("lost","06:00 — the Mimic was found, but unfinished containment stations failed at sunrise.");
+        else finish("lost","06:00 — every station is secure, but the Mimic is still among the Keepers.");
       }
-      const t=setTimeout(()=>setSpeakerIndex(v=>Math.min(testimony.length-1,v+1)),3200);
-      return()=>clearTimeout(t);
-    }
-  },[phase,meetingStage,speakerIndex,testimony.length]);
+    };
+    tick();
+    const id=window.setInterval(tick,250);
+    const resume=()=>tick();
+    window.addEventListener("focus",resume);document.addEventListener("visibilitychange",resume);
+    return()=>{window.clearInterval(id);window.removeEventListener("focus",resume);document.removeEventListener("visibilitychange",resume);};
+  },[phase]);
 
   useEffect(()=>{
-    if(phase!=="play"||paused||menu)return;
-    const t=setTimeout(()=>setTimer(v=>Math.max(0,v-1)),1000);return()=>clearTimeout(t);
-  },[phase,paused,menu,timer]);
-
-  useEffect(()=>{if(phase==="play"&&timer===0)finish(role==="friend"?"lost":"won","06:00 — the Hatch opens before containment finishes.");},[timer,phase,role]);
+    if(!activeSabotage||roundEndedRef.current)return;
+    const tick=()=>{
+      const left=Math.max(0,Math.ceil((activeSabotage.deadlineAt-Date.now())/1000));
+      setSabotageSeconds(left);
+      if(left<=0&&!roundEndedRef.current)finish("lost",activeSabotage.fatalText);
+    };
+    tick();
+    const id=window.setInterval(tick,200);
+    const resume=()=>tick();
+    window.addEventListener("focus",resume);document.addEventListener("visibilitychange",resume);
+    return()=>{window.clearInterval(id);window.removeEventListener("focus",resume);document.removeEventListener("visibilitychange",resume);};
+  },[activeSabotage]);
 
   useEffect(()=>{
     if(phase!=="play")return;
