@@ -77,6 +77,15 @@ Production build:
 npm run build
 ```
 
+## Competition polish
+
+- **Deduction-first AI:** Keepers perform visible chores, remember nearby Friends and give personality-driven testimony; AI votes use suspicion and memory rather than knowing the Mimic's identity.
+- **Sneakier Mimic:** it spends most of the round following legitimate chore routes, takes short context-aware detours, avoids witnesses before kills and lies during meetings.
+- **Readable horror:** global moonlight keeps navigation clear; blackout remains threatening without turning the world into a player-centered black bubble.
+- **Premium settings:** Low/Medium/High/Ultra graphics presets, 30/60/120 FPS caps, camera zoom, brightness, fog, film grain, screen shake, reduced motion, objective hints, and separate master/music/ambience/SFX controls.
+- **Procedural audio:** a low Garden drone and event stingers are synthesized in-browser, so the preview does not depend on external audio files.
+- **Judge-friendly HUD:** selected Friend identity, live preview RF balance, RF spent, simulated reward messaging, contextual interaction labels and a post-round night log are visible in-game.
+
 ## Checks and known limitations
 
 - FriendSDK viewport: **960 × 640**.
