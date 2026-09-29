@@ -28,7 +28,7 @@ Meetings are the deduction game: every survivor gives a report based on what it 
 
 Open **https://potatolover-69.github.io/rare-friends-the-hatch/**, connect a wallet on Robinhood mainnet and choose a qualifying Generations Friend.
 
-**Controls:** WASD / arrows move · click/tap moves toward a point · **E** interact / perform chore · **R** report a nearby body · **F** toggle a purchased flashlight · **Meeting** calls one emergency meeting · **Shop / Gear** opens the RF Night Market.
+**Controls:** WASD / arrows move · click/tap moves toward a point · **E** interact / perform chore · **R** report a nearby body · **F** toggle a purchased flashlight · **M** open the full Garden map · **G** open the RF Night Market · **Meeting** calls one emergency meeting.
 
 ### How a round works
 
@@ -45,12 +45,22 @@ Open **https://potatolover-69.github.io/rare-friends-the-hatch/**, connect a wal
 
 | Item | Simulated cost | Utility |
 |---|---:|---|
-| Flashlight | 0.10 RF | Warm directional beam, toggle with F |
+| Flashlight | 0.10 RF | Warm directional beam with a finite charge; toggle with F |
+| Battery Pack | 0.10 RF | Consumable refill that restores flashlight charge to 100% |
 | UV Scanner | 0.20 RF | Adds an inconsistency clue during meetings |
 | Emergency Flare | 0.30 RF | Restores Garden lighting immediately |
 | Ward | 0.10 RF | Cancels active Hatch sabotage |
 
-A successful round displays a **simulated +0.40 RF victory reward**. Purchases use the FriendSDK preview's supported buy / play / settle path so the prototype demonstrates **Token Activity**, while the optional gear + victory reward loop demonstrates **Economy Potential**.
+A successful round displays a **small simulated +0.15 RF reward, increased to +0.20 RF when all four chores are completed**. Purchases use the FriendSDK preview's supported buy / play / settle path so the prototype demonstrates **Token Activity**, while the optional gear + victory reward loop demonstrates **Economy Potential**.
+
+### Exploration, onboarding and presentation
+
+- The Garden is expanded to a 3000 × 2100 scrolling world with named landmarks, longer routes and collision against tree trunks and rocks.
+- A clickable minimap plus a full **M** map shows the player, four chore sites and exploration landmarks without revealing Keeper positions.
+- First-time players receive a six-step animated tutorial covering movement, chores, the RF shop, flashlight batteries, reporting bodies, meeting testimony, voting and winning.
+- Temporary gameplay messages use short non-blocking toast notifications instead of covering the action bar.
+- Murdered Keepers stop moving, remain in a corpse pose and display a faint transparent spirit beside the body.
+- Victory has a sunrise animation, particles, a count-up simulated RF reward and a post-round investigation log.
 
 ## Why the three categories fit
 
