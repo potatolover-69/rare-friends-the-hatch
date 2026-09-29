@@ -1,6 +1,6 @@
 # Rare Friends: The Hatch
 
-**Play the GitHub Pages preview:** https://potatolover-69.github.io/rare-friends-the-hatch/
+**Play the GitHub Pages preview:** https://rare-friends-the-hatch.jamiecrypto0000.workers.dev/
 
 **Rare Friends Vibeathon 2026 · Character Spotlight · Token Activity · Economy Potential**
 
@@ -18,9 +18,22 @@ Move through the Garden → perform containment chores → observe other Keepers
 
 The Mimic deliberately behaves like a normal worker most of the time, takes occasional detours, sabotages systems, kills only when isolated, then lies during meetings. Evidence is circumstantial rather than a direct reveal.
 
+## Puzzle tasks
+
+The six containment stations are interactive mini-puzzles rather than one-button chores:
+
+- Lamp Court — relay/circuit sequence
+- Moon Pond — mirror/reflection alignment
+- Central Hatch — containment bolt sequence
+- Old Shrine — symbol-order puzzle
+- Tool Shed — fuse selection and repair
+- Memorial Ward — boundary-stone pattern
+
+The Mimic can sabotage a secured station, marking it unstable and forcing the puzzle to be solved again.
+
 ## Lighting
 
-The Garden now uses global moonlight and local environmental lamps instead of a player-centered darkness bubble. Blackouts dim the whole level but keep navigation readable. A purchased flashlight adds an optional directional beam.
+The Garden now uses global moonlight and local environmental lamps instead of a player-centered darkness bubble. Street lamps normally illuminate the routes. A Lamp Court sabotage makes them visibly flicker before the Garden falls into a readable blackout. A purchased flashlight adds a directional beam, and rare pairs of eyes can briefly appear in the darkness before vanishing.
 
 ## Prototype RF economy
 
