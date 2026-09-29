@@ -27,11 +27,12 @@ The Garden now uses global moonlight and local environmental lamps instead of a 
 The Night Market includes optional utility sinks:
 
 - Flashlight — 0.10 RF
+- Battery Pack — 0.10 RF
 - UV Scanner — 0.20 RF
 - Emergency Flare — 0.30 RF
 - Ward — 0.10 RF
 
-Purchases exercise FriendSDK buy/play/settle activity. The intended burn/sink behavior and the displayed **+0.40 RF win reward are simulated MVP economy concepts**, not a claim that the live Rare Friends ecosystem currently burns or distributes RF this way.
+Purchases exercise FriendSDK buy/play/settle activity. The intended burn/sink behavior and the displayed **+0.15 to +0.20 RF win reward are simulated MVP economy concepts**, not a claim that the live Rare Friends ecosystem currently burns or distributes RF this way. Flashlight charge drains while the light is on, making Battery Packs a repeat optional utility sink.
 
 The base deduction game remains playable without purchases.
 
@@ -42,10 +43,19 @@ The base deduction game remains playable without purchases.
 - E — use / task interaction
 - R — report body
 - F — toggle purchased flashlight
+- M — open/close the full Garden map
+- G — open the RF Night Market
 - Meeting — call one emergency meeting
 - Shop / Gear — open the RF Night Market
 
 ## Competition polish
+
+- Expanded 3000 × 2100 Garden with named landmarks, collision-aware exploration, minimap and full map
+- Six-step animated first-time tutorial explaining movement, chores, gear, battery drain, reporting, meetings and voting
+- Finite flashlight charge with optional Battery Pack refills
+- Frozen corpse poses plus transparent spirits for murdered Keepers
+- Non-blocking toast notifications and a more readable UI font stack
+- Animated sunrise victory sequence with reward count-up and particles
 
 - Smarter social-deduction AI with real chore routes, memory and personality-driven meeting reports
 - Mimic deception that avoids direct identity giveaways
