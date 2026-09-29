@@ -111,3 +111,5 @@ border-left:1px solid rgba(207,219,203,.3);box-shadow:-30px 0 90px rgba(0,0,0,.6
   .settings-page{gap:8px}
   .meeting-card{max-height:96%;padding:14px}
 }
+
+.bottom-actions .context-ready{border-color:#d4dfcf;background:linear-gradient(180deg,rgba(43,55,44,.98),rgba(12,18,13,.96));box-shadow:0 0 0 1px rgba(220,232,215,.08),0 0 24px rgba(173,197,168,.10)}
