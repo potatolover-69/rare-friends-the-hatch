@@ -346,3 +346,10 @@ linear-gradient(145deg,#172219,#08100a 72%)!important}
 .statusbox.danger b{color:#e1b49a!important}.statusbox.danger span{color:#c99274!important}
 .map-marker.zone.unstable span{background:rgba(54,19,11,.88)!important;border:1px solid rgba(192,111,75,.26);padding:3px 5px}
 @media(max-width:700px){.friend-portrait-canvas{width:82px;height:98px}}
+
+
+.cinematic-controls{position:absolute;right:12px;bottom:12px;display:flex;gap:7px;z-index:4}
+.cinematic-controls button{padding:8px 11px;border:1px solid #435044;background:#0a0f0b;color:#aab7a7;font:800 8px Inter,ui-sans-serif,system-ui,sans-serif;cursor:pointer}
+.cinematic-controls button:first-child{background:#dfe7da;color:#070907;border-color:#dfe7da}
+.cinematic-controls button:hover{transform:translateY(-1px)}
+@media(max-width:700px){.cinematic-controls{position:static;margin:0 14px 14px;justify-content:flex-end}.cinematic-controls button{font-size:7px}}
