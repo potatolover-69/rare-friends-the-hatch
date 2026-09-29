@@ -41,6 +41,7 @@ const WORLD={width:3000,height:2100};
 const START={x:1500,y:1870};
 const SPEED=245;
 const PROFILE={token:"334137",character:"Mask",scenery:"Garden",floor:"Hatch",generation:6,seed:334137};
+const MAIN_MUSIC_URL="https://raw.githubusercontent.com/potatolover-69/rare-friends-the-hatch/main/game/assets/audio/Before_the_Breath.mp3";
 
 const ZONES:Record<ZoneKey,{name:string;p:Point;hint:string}>={
   lamp:{name:"Lamp Court",p:{x:620,y:920},hint:"Reconnect the lamp circuit and restore the street lights."},
@@ -140,12 +141,18 @@ function createHatchAudio():HatchAudio|null{
   const master=context.createGain(),music=context.createGain(),ambience=context.createGain(),sfx=context.createGain();
   master.connect(context.destination);music.connect(master);ambience.connect(master);sfx.connect(master);
 
+  const track=new Audio(MAIN_MUSIC_URL);
+  track.preload="auto";track.loop=true;track.crossOrigin="anonymous";
+  let trackSource:MediaElementAudioSourceNode|null=null;
+  try{trackSource=context.createMediaElementSource(track);trackSource.connect(music);}catch{}
+  track.addEventListener("error",()=>track.pause());
+
   const drone=context.createOscillator(),droneFilter=context.createBiquadFilter(),droneGain=context.createGain();
   drone.type="sine";drone.frequency.value=55;droneFilter.type="lowpass";droneFilter.frequency.value=180;droneGain.gain.value=.025;
   drone.connect(droneFilter).connect(droneGain).connect(ambience);drone.start();
 
   const tone=context.createOscillator(),toneGain=context.createGain();
-  tone.type="triangle";tone.frequency.value=82.5;toneGain.gain.value=.012;tone.connect(toneGain).connect(music);tone.start();
+  tone.type="triangle";tone.frequency.value=82.5;toneGain.gain.value=.004;tone.connect(toneGain).connect(music);tone.start();
 
   const set=(settings:GameSettings,muted:boolean)=>{
     const off=muted?0:1;
@@ -171,7 +178,7 @@ function createHatchAudio():HatchAudio|null{
       osc.connect(gain).connect(sfx);osc.start(start);osc.stop(start+.17);
     }
   };
-  return {resume:async()=>{if(context.state==="suspended")await context.resume();},set,cue,siren,dispose:()=>{try{drone.stop();tone.stop();void context.close();}catch{}}};
+  return {resume:async()=>{if(context.state==="suspended")await context.resume();if(track.paused){try{await track.play();}catch{}}},set,cue,siren,dispose:()=>{try{track.pause();track.src="";trackSource?.disconnect();drone.stop();tone.stop();void context.close();}catch{}}};
 }
 
 function FriendPortrait({sprites,name}:{sprites?:GenerationSprites;name:string}){
