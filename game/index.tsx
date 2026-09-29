@@ -972,22 +972,44 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       const fog1=ctx.createRadialGradient(160,540,20,160,540,280);fog1.addColorStop(0,"rgba(185,198,187,"+fogAlpha+")");fog1.addColorStop(1,"rgba(185,198,187,0)");ctx.fillStyle=fog1;ctx.fillRect(0,300,420,340);
       ctx.restore();
 
-      // Ambient night lighting: the world remains readable instead of following the player with a dark bubble.
-      ctx.save();
-      ctx.fillStyle=lights?"rgba(2,8,5,.18)":"rgba(1,4,3,.38)";ctx.fillRect(0,0,VIEW.width,VIEW.height);
-      const moon=ctx.createLinearGradient(0,0,VIEW.width,VIEW.height);moon.addColorStop(0,"rgba(174,196,187,.10)");moon.addColorStop(.55,"rgba(76,102,92,.02)");moon.addColorStop(1,"rgba(0,0,0,.10)");ctx.fillStyle=moon;ctx.fillRect(0,0,VIEW.width,VIEW.height);
-
+      // Lighting pass. Normal nights stay readable; a sabotaged grid becomes almost completely black.
       const sx=(p.x-cam.current.x)*zoom,sy=(p.y-cam.current.y)*zoom;
-      if(inventory.flashlight>0&&flashlightOn){
-        const dir=facing.current==="right"?0:facing.current==="left"?Math.PI:facing.current==="down"?Math.PI/2:-Math.PI/2;
-        const length=390,spread=.48;
-        ctx.globalCompositeOperation="screen";
-        const beam=ctx.createRadialGradient(sx,sy,8,sx+Math.cos(dir)*210,sy+Math.sin(dir)*210,length);
-        beam.addColorStop(0,"rgba(255,248,213,.24)");beam.addColorStop(.45,"rgba(255,243,196,.13)");beam.addColorStop(1,"rgba(255,243,196,0)");
-        ctx.fillStyle=beam;ctx.beginPath();ctx.moveTo(sx,sy);ctx.arc(sx,sy,length,dir-spread,dir+spread);ctx.closePath();ctx.fill();
-        ctx.globalCompositeOperation="source-over";
+      if(lights){
+        ctx.save();
+        const flicker=lightsFlickering?(Math.sin(now*.055)>.1?.22:.64):.18;
+        ctx.fillStyle="rgba(2,8,5,"+flicker+")";ctx.fillRect(0,0,VIEW.width,VIEW.height);
+        const moon=ctx.createLinearGradient(0,0,VIEW.width,VIEW.height);moon.addColorStop(0,"rgba(174,196,187,.10)");moon.addColorStop(.55,"rgba(76,102,92,.02)");moon.addColorStop(1,"rgba(0,0,0,.10)");ctx.fillStyle=moon;ctx.fillRect(0,0,VIEW.width,VIEW.height);
+        ctx.restore();
+      }else{
+        ctx.save();ctx.fillStyle="rgba(0,0,0,.965)";ctx.fillRect(0,0,VIEW.width,VIEW.height);ctx.restore();
+
+        if(inventory.flashlight>0&&flashlightOn&&flashlightBattery>0){
+          const dir=facing.current==="right"?0:facing.current==="left"?Math.PI:facing.current==="down"?Math.PI/2:-Math.PI/2;
+          const length=430,spread=.42;
+          ctx.save();
+          ctx.beginPath();ctx.moveTo(sx,sy);ctx.arc(sx,sy,length,dir-spread,dir+spread);ctx.closePath();ctx.clip();
+          ctx.scale(zoom,zoom);ctx.translate(-cam.current.x+shakeX/zoom,-cam.current.y+shakeY/zoom);
+          drawWorld(ctx,settings.reducedMotion?0:now,false,false,hatchPanic,[],settings.graphics);
+          renderAgents.forEach(a=>{const sp=npcSprites[String(a.tokenId)];if(a.alive){if(sp)drawNpcFriend(ctx,sp,a,now);else drawKeeper(ctx,a,now);drawChoreEffect(ctx,a,now);}else if(a.lastAction!=="expelled by vote"){if(sp)drawDeadNpcFriend(ctx,sp,a,now);else drawDeadKeeper(ctx,a,now);}});
+          ctx.restore();
+
+          ctx.save();ctx.beginPath();ctx.moveTo(sx,sy);ctx.arc(sx,sy,length,dir-spread,dir+spread);ctx.closePath();ctx.clip();
+          const beam=ctx.createRadialGradient(sx,sy,8,sx+Math.cos(dir)*170,sy+Math.sin(dir)*170,length);
+          beam.addColorStop(0,"rgba(255,246,211,.20)");beam.addColorStop(.58,"rgba(255,237,188,.08)");beam.addColorStop(1,"rgba(255,237,188,0)");
+          ctx.fillStyle=beam;ctx.fillRect(0,0,VIEW.width,VIEW.height);ctx.restore();
+        }
+
+        // Rare eyes remain visible even when the environment is otherwise unreadable.
+        const eyeCycle=now%12800;
+        if(eyeCycle>9200&&eyeCycle<10150){
+          const eyeTree=TREE_POINTS[Math.floor(now/12800)%TREE_POINTS.length],ex=(eyeTree.x-cam.current.x)*zoom,ey=(eyeTree.y-95-cam.current.y)*zoom;
+          if(ex>-20&&ex<VIEW.width+20&&ey>-20&&ey<VIEW.height+20){
+            const alpha=Math.sin(((eyeCycle-9200)/950)*Math.PI)*.92;
+            ctx.save();ctx.fillStyle="rgba(226,235,195,"+alpha+")";ctx.shadowColor="rgba(218,232,184,.8)";ctx.shadowBlur=12;
+            ctx.beginPath();ctx.ellipse(ex-7,ey,3.2,1.7,0,0,Math.PI*2);ctx.ellipse(ex+7,ey,3.2,1.7,0,0,Math.PI*2);ctx.fill();ctx.restore();
+          }
+        }
       }
-      ctx.restore();
       ctx.save();ctx.scale(zoom,zoom);ctx.translate(-cam.current.x+shakeX/zoom,-cam.current.y+shakeY/zoom);drawFriend(ctx,sprites,p,facing.current,dist(before,p)>.1,Math.floor(now/110)%8,side.current);ctx.restore();
 
       raf=requestAnimationFrame(loop);
