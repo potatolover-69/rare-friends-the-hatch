@@ -12,7 +12,7 @@ type Point={x:number;y:number};
 type Role="friend"|"mimic";
 type Phase="title"|"role"|"play"|"meeting"|"won"|"lost";
 type ZoneKey="lamp"|"pond"|"hatch"|"shrine";
-type Menu="store"|"inventory"|"settings"|null;
+type Menu="store"|"inventory"|"settings"|"map"|"tutorial"|null;
 type Personality="careful"|"nervous"|"direct"|"quiet"|"watchful";
 type SettingsTab="graphics"|"audio"|"gameplay";
 type GameSettings={
@@ -33,18 +33,25 @@ type GameSettings={
 type Agent={id:string;name:string;p:Point;alive:boolean;color:string;target:Point;speed:number;task:ZoneKey|null;cooldown:number;suspicion:number;tokenId:bigint;choreIndex:number;workUntil:number;lastZone:ZoneKey;lastAction:string;personality:Personality;reported:boolean;lastSeenName:string|null;lastSeenZone:ZoneKey;lastSeenAt:number};
 
 const VIEW={width:960,height:640};
-const WORLD={width:2100,height:1420};
-const START={x:1050,y:1240};
+const WORLD={width:3000,height:2100};
+const START={x:1500,y:1870};
 const SPEED=245;
 const PROFILE={token:"334137",character:"Mask",scenery:"Garden",floor:"Hatch",generation:6,seed:334137};
 
 const ZONES:Record<ZoneKey,{name:string;p:Point;hint:string}>={
-  lamp:{name:"Lamp Court",p:{x:480,y:520},hint:"Restore the courtyard lights."},
-  pond:{name:"Moon Pond",p:{x:1580,y:790},hint:"Calibrate the reflection ward."},
-  hatch:{name:"Central Hatch",p:{x:1040,y:710},hint:"Reinforce the containment bolts."},
-  shrine:{name:"Old Shrine",p:{x:1510,y:300},hint:"Record the night seal."},
+  lamp:{name:"Lamp Court",p:{x:620,y:920},hint:"Restore the courtyard lights."},
+  pond:{name:"Moon Pond",p:{x:2380,y:1280},hint:"Calibrate the reflection ward."},
+  hatch:{name:"Central Hatch",p:{x:1510,y:1040},hint:"Reinforce the containment bolts."},
+  shrine:{name:"Old Shrine",p:{x:2360,y:430},hint:"Record the night seal."},
 };
 const ALL_ZONES=Object.keys(ZONES) as ZoneKey[];
+const LANDMARKS=[
+  {name:"Tool Shed",p:{x:430,y:1640}},
+  {name:"North Grove",p:{x:720,y:350}},
+  {name:"Broken Walk",p:{x:2440,y:1690}},
+  {name:"Fog Gate",p:{x:2700,y:720}},
+  {name:"Memorial Corner",p:{x:1730,y:360}},
+] as const;
 const BOT_NAMES=["Moth","Reed","Vale","Ash","Ivy"];
 const NPC_TOKEN_IDS=[334130n,334131n,334132n,334133n,334134n];
 const PERSONALITIES:Personality[]=["careful","nervous","direct","quiet","watchful"];
@@ -53,7 +60,21 @@ const DEFAULT_SETTINGS:GameSettings={graphics:"high",fps:60,cameraZoom:1,brightn
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 const dist=(a:Point,b:Point)=>Math.hypot(a.x-b.x,a.y-b.y);
 const near=(a:Point,b:Point,r=95)=>dist(a,b)<r;
-const randPoint=(seed:number)=>({x:220+((seed*811)%1660),y:190+((seed*557)%990)});
+const randPoint=(seed:number)=>({x:180+((seed*811)%(WORLD.width-360)),y:170+((seed*557)%(WORLD.height-340))});
+const TREE_POINTS=Array.from({length:38},(_,i)=>randPoint(i+13)).filter(p=>dist(p,START)>170&&ALL_ZONES.every(z=>dist(p,ZONES[z].p)>190)&&LANDMARKS.every(l=>dist(p,l.p)>120));
+const ROCK_POINTS=Array.from({length:14},(_,i)=>randPoint(i+91)).filter(p=>dist(p,START)>130&&ALL_ZONES.every(z=>dist(p,ZONES[z].p)>150));
+function blocked(p:Point){
+  if(p.x<118||p.y<118||p.x>WORLD.width-118||p.y>WORLD.height-118)return true;
+  if(TREE_POINTS.some(t=>dist(p,t)<48))return true;
+  if(ROCK_POINTS.some(r=>dist(p,r)<30))return true;
+  return false;
+}
+function moveWithCollision(p:Point,vx:number,vy:number){
+  const nextX={x:clamp(p.x+vx,120,WORLD.width-120),y:p.y};
+  if(!blocked(nextX))p.x=nextX.x;
+  const nextY={x:p.x,y:clamp(p.y+vy,120,WORLD.height-120)};
+  if(!blocked(nextY))p.y=nextY.y;
+}
 const formatRF=(value:bigint|undefined)=>{
   if(value===undefined)return "—";
   const RF=10n**18n,whole=value/RF,frac=(value%RF)*100n/RF;
@@ -128,6 +149,36 @@ function drawNpcFriend(ctx:CanvasRenderingContext2D,sprites:GenerationSprites,a:
   ctx.fillText(a.name+" · #"+a.tokenId.toString(),a.p.x,a.p.y+27);
   if(a.workUntil>t){ctx.fillStyle="rgba(232,239,228,.72)";ctx.font="700 8px ui-monospace";ctx.fillText("WORKING",a.p.x,a.p.y+39);}
   ctx.restore();
+}
+
+function drawDeadNpcFriend(ctx:CanvasRenderingContext2D,sprites:GenerationSprites,a:Agent,t:number){
+  const rows=spriteFrame(sprites,"down",false,0,"right").frame.rows;
+  const scale=4,reported=a.reported;
+  ctx.save();
+  const blood=ctx.createRadialGradient(a.p.x,a.p.y+10,3,a.p.x,a.p.y+10,42);
+  blood.addColorStop(0,reported?"rgba(82,13,17,.34)":"rgba(125,12,19,.62)");blood.addColorStop(1,"rgba(95,10,15,0)");
+  ctx.fillStyle=blood;ctx.beginPath();ctx.ellipse(a.p.x,a.p.y+10,45,18,0,0,Math.PI*2);ctx.fill();
+  ctx.translate(a.p.x,a.p.y+7);ctx.rotate(Number(a.tokenId%2n)===0?-.95:.95);ctx.globalAlpha=reported?.62:.96;ctx.imageSmoothingEnabled=false;
+  rows.forEach((row,y)=>[...row].forEach((px,x)=>{if(px==="#"){ctx.fillStyle="rgba(229,236,226,.58)";ctx.fillRect(-32+x*scale-1,-58+y*scale-1,scale+2,scale+2);}}));
+  rows.forEach((row,y)=>[...row].forEach((px,x)=>{if(px==="#"){ctx.fillStyle="#050605";ctx.fillRect(-32+x*scale,-58+y*scale,scale,scale);}}));
+  ctx.restore();
+
+  // A faint spirit remains beside the body as a readable death state.
+  const gy=a.p.y-70+Math.sin(t/360+Number(a.tokenId%7n)) * 5,gx=a.p.x+34;
+  ctx.save();ctx.globalAlpha=reported?.12:.24;ctx.imageSmoothingEnabled=false;
+  const glow=ctx.createRadialGradient(gx,gy,2,gx,gy,42);glow.addColorStop(0,"rgba(215,235,223,.22)");glow.addColorStop(1,"rgba(215,235,223,0)");
+  ctx.fillStyle=glow;ctx.beginPath();ctx.arc(gx,gy,42,0,Math.PI*2);ctx.fill();
+  rows.forEach((row,y)=>[...row].forEach((px,x)=>{if(px==="#"){ctx.fillStyle="#dce9df";ctx.fillRect(gx-32+x*scale,gy-38+y*scale,scale,scale);}}));
+  ctx.restore();
+  ctx.save();ctx.font="700 9px Inter,Segoe UI,sans-serif";ctx.textAlign="center";ctx.fillStyle="rgba(224,231,221,.72)";ctx.fillText(a.name+" · DEAD",a.p.x,a.p.y+38);ctx.restore();
+}
+
+function drawDeadKeeper(ctx:CanvasRenderingContext2D,a:Agent,t:number){
+  ctx.save();
+  ctx.fillStyle=a.reported?"rgba(92,14,18,.25)":"rgba(125,13,20,.5)";ctx.beginPath();ctx.ellipse(a.p.x,a.p.y+8,42,17,0,0,Math.PI*2);ctx.fill();
+  ctx.translate(a.p.x,a.p.y);ctx.rotate(-.9);ctx.globalAlpha=a.reported?.58:.94;ctx.fillStyle="#2b302b";ctx.fillRect(-30,-9,60,18);ctx.fillStyle="#6d746b";ctx.beginPath();ctx.arc(-34,0,10,0,Math.PI*2);ctx.fill();ctx.restore();
+  ctx.save();ctx.globalAlpha=a.reported?.10:.22;ctx.translate(a.p.x+28,a.p.y-58+Math.sin(t/380)*5);ctx.fillStyle="#cad8cc";ctx.beginPath();ctx.arc(0,-20,10,0,Math.PI*2);ctx.fill();ctx.fillRect(-10,-10,20,32);ctx.restore();
+  ctx.save();ctx.font="700 9px Inter,Segoe UI,sans-serif";ctx.textAlign="center";ctx.fillStyle="#dce4d9";ctx.fillText(a.name+" · DEAD",a.p.x,a.p.y+34);ctx.restore();
 }
 
 function drawChoreEffect(ctx:CanvasRenderingContext2D,a:Agent,t:number){
@@ -311,25 +362,40 @@ function drawHatch(ctx:CanvasRenderingContext2D,hatchPanic:boolean,t:number){
   ctx.restore();
 }
 
+function drawLandmarks(ctx:CanvasRenderingContext2D){
+  for(const l of LANDMARKS){
+    ctx.save();ctx.translate(l.p.x,l.p.y);
+    ctx.fillStyle="rgba(0,0,0,.34)";ctx.beginPath();ctx.ellipse(0,22,58,18,0,0,Math.PI*2);ctx.fill();
+    if(l.name==="Tool Shed"){ctx.fillStyle="#202720";ctx.fillRect(-48,-50,96,72);ctx.fillStyle="#0e120f";ctx.fillRect(-16,-20,32,42);ctx.strokeStyle="#596458";ctx.strokeRect(-48,-50,96,72);}
+    else if(l.name==="Fog Gate"){ctx.strokeStyle="#505a50";ctx.lineWidth=9;ctx.beginPath();ctx.moveTo(-48,24);ctx.lineTo(-48,-72);ctx.lineTo(48,-72);ctx.lineTo(48,24);ctx.stroke();}
+    else if(l.name==="Memorial Corner"){ctx.fillStyle="#333a34";ctx.fillRect(-34,-35,68,58);ctx.fillStyle="#778176";ctx.fillRect(-25,-26,50,5);}
+    else if(l.name==="Broken Walk"){ctx.fillStyle="#404840";for(let i=-2;i<=2;i++)ctx.fillRect(i*34-14,(i%2)*8,28,14);}
+    else {ctx.fillStyle="#263127";ctx.beginPath();ctx.arc(0,-18,44,0,Math.PI*2);ctx.fill();}
+    ctx.font="700 10px Inter,Segoe UI,sans-serif";ctx.textAlign="center";ctx.fillStyle="rgba(208,219,205,.58)";ctx.fillText(l.name,0,48);ctx.restore();
+  }
+}
+
 function drawWorld(ctx:CanvasRenderingContext2D,t:number,lights:boolean,hatchPanic:boolean,bodies:Agent[],quality:GameSettings["graphics"]){
   const bg=ctx.createLinearGradient(0,0,0,WORLD.height);bg.addColorStop(0,"#0d1512");bg.addColorStop(.58,"#111a14");bg.addColorStop(1,"#060a08");ctx.fillStyle=bg;ctx.fillRect(0,0,WORLD.width,WORLD.height);
 
   ctx.fillStyle="#152018";ctx.fillRect(80,80,WORLD.width-160,WORLD.height-140);
   const detail=quality==="low"?.42:quality==="medium"?.68:quality==="high"?1:1.28;
   for(let i=0;i<Math.floor(280*detail);i++){
-    const x=100+((i*193+PROFILE.seed)%1900),y=100+((i*317+PROFILE.seed*3)%1190);
+    const x=100+((i*193+PROFILE.seed)%(WORLD.width-200)),y=100+((i*317+PROFILE.seed*3)%(WORLD.height-200));
     const h=5+(i%7);ctx.strokeStyle=i%4===0?"rgba(111,136,104,.20)":"rgba(54,77,57,.24)";ctx.lineWidth=1;
     ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.sin(i)*2,y-h);ctx.stroke();
   }
 
-  const paths=[[START,ZONES.hatch.p],[ZONES.hatch.p,ZONES.lamp.p],[ZONES.hatch.p,ZONES.pond.p],[ZONES.hatch.p,ZONES.shrine.p]] as const;
+  const paths=[[START,ZONES.hatch.p],[ZONES.hatch.p,ZONES.lamp.p],[ZONES.hatch.p,ZONES.pond.p],[ZONES.hatch.p,ZONES.shrine.p],[ZONES.lamp.p,LANDMARKS[0].p],[ZONES.shrine.p,LANDMARKS[1].p],[ZONES.pond.p,LANDMARKS[2].p],[ZONES.shrine.p,LANDMARKS[4].p]] as const;
   paths.forEach((p,i)=>drawStonePath(ctx,p[0],p[1],i+PROFILE.seed));
 
   ctx.strokeStyle="#2f3931";ctx.lineWidth=5;ctx.strokeRect(86,86,WORLD.width-172,WORLD.height-152);
   for(let x=105;x<WORLD.width-95;x+=52){ctx.fillStyle="#151b17";ctx.fillRect(x,80,4,50);ctx.fillRect(x,WORLD.height-118,4,48);}
 
-  for(let i=0;i<Math.floor(24*detail);i++){const p=randPoint(i+13);drawTree(ctx,p,t,i+3);}
-  for(let i=0;i<Math.floor(18*detail);i++){drawBush(ctx,{x:170+((i*229)%1740),y:180+((i*401)%1010)},i+11);}
+  TREE_POINTS.slice(0,Math.max(8,Math.floor(TREE_POINTS.length*detail))).forEach((p,i)=>drawTree(ctx,p,t,i+3));
+  for(let i=0;i<Math.floor(24*detail);i++){drawBush(ctx,{x:170+((i*229)%(WORLD.width-340)),y:180+((i*401)%(WORLD.height-360))},i+11);}
+  for(const r of ROCK_POINTS){ctx.fillStyle="#293029";ctx.beginPath();ctx.ellipse(r.x,r.y,31,20,.2,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#454e45";ctx.stroke();}
+  drawLandmarks(ctx);
 
   drawLampCourt(ctx,lights,t);
   drawPond(ctx,t);
@@ -346,7 +412,7 @@ function drawWorld(ctx:CanvasRenderingContext2D,t:number,lights:boolean,hatchPan
   }
 
   for(let i=0;i<Math.max(2,Math.floor(8*detail));i++){
-    const x=((t*.018+i*330)%2600)-250,y=180+i*145;
+    const x=((t*.018+i*430)%(WORLD.width+500))-250,y=180+(i*225)%(WORLD.height-260);
     const fog=ctx.createRadialGradient(x,y,10,x,y,180);fog.addColorStop(0,"rgba(190,205,195,.035)");fog.addColorStop(1,"rgba(190,205,195,0)");
     ctx.fillStyle=fog;ctx.beginPath();ctx.ellipse(x,y,220,70,0,0,Math.PI*2);ctx.fill();
   }
@@ -385,7 +451,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const [meetingReason,setMeetingReason]=useState("");
   const [emergencyLeft,setEmergencyLeft]=useState(1);
   const [message,setMessage]=useState("A social-deduction horror night in Garden Unit 06.");
-  const [timer,setTimer]=useState(240);
+  const [timer,setTimer]=useState(360);
   const [killCooldown,setKillCooldown]=useState(0);
   const [shiftCooldown,setShiftCooldown]=useState(0);
   const [disguise,setDisguise]=useState<string|null>(null);
@@ -471,7 +537,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       if(phase==="play"&&!paused&&!menu){
         let dx=0,dy=0;if(keys.current.has("a")||keys.current.has("arrowleft"))dx--;if(keys.current.has("d")||keys.current.has("arrowright"))dx++;if(keys.current.has("w")||keys.current.has("arrowup"))dy--;if(keys.current.has("s")||keys.current.has("arrowdown"))dy++;
         if(dx||dy)destination.current=null;else if(destination.current){dx=destination.current.x-p.x;dy=destination.current.y-p.y;if(Math.hypot(dx,dy)<7){destination.current=null;dx=0;dy=0;}}
-        if(dx||dy){const l=Math.hypot(dx,dy);p.x=clamp(p.x+dx/l*SPEED*dt,120,WORLD.width-120);p.y=clamp(p.y+dy/l*SPEED*dt,120,WORLD.height-120);facing.current=Math.abs(dx)>Math.abs(dy)?(dx<0?"left":"right"):(dy<0?"up":"down");if(facing.current==="left"||facing.current==="right")side.current=facing.current;}
+        if(dx||dy){const l=Math.hypot(dx,dy);moveWithCollision(p,dx/l*SPEED*dt,dy/l*SPEED*dt);facing.current=Math.abs(dx)>Math.abs(dy)?(dx<0?"left":"right"):(dy<0?"up":"down");if(facing.current==="left"||facing.current==="right")side.current=facing.current;}
 
         // Keepers do visible chores, remember nearby Friends, and build believable alibis.
         const current=agentsRef.current;
@@ -580,8 +646,12 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       const shakeX=shaking?Math.sin(now*.11)*5:0,shakeY=shaking?Math.cos(now*.13)*4:0;
       ctx.clearRect(0,0,VIEW.width,VIEW.height);ctx.save();ctx.scale(zoom,zoom);ctx.translate(-cam.current.x+shakeX/zoom,-cam.current.y+shakeY/zoom);
       const renderAgents=agentsRef.current;
-      drawWorld(ctx,settings.reducedMotion?0:now,lights,hatchPanic,renderAgents.filter(a=>!a.alive&&!a.reported),settings.graphics);
-      renderAgents.forEach(a=>{const sp=npcSprites[String(a.tokenId)];if(sp)drawNpcFriend(ctx,sp,a,now);else drawKeeper(ctx,a,now);drawChoreEffect(ctx,a,now);});
+      drawWorld(ctx,settings.reducedMotion?0:now,lights,hatchPanic,[],settings.graphics);
+      renderAgents.forEach(a=>{
+        const sp=npcSprites[String(a.tokenId)];
+        if(a.alive){if(sp)drawNpcFriend(ctx,sp,a,now);else drawKeeper(ctx,a,now);drawChoreEffect(ctx,a,now);}
+        else if(a.lastAction!=="expelled by vote"){if(sp)drawDeadNpcFriend(ctx,sp,a,now);else drawDeadKeeper(ctx,a,now);}
+      });
       ctx.restore();
 
       // Screen-space mist and drifting particles.
@@ -624,7 +694,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   function start(){
     void hatchAudio.current?.resume();
     const chosen:Role="friend";
-    setRole(chosen);setPhase("role");setTimer(240);setLights(true);setHatchPanic(false);setTasks({lamp:false,pond:false,hatch:false,shrine:false});setEmergencyLeft(1);setKillCooldown(12);setShiftCooldown(10);setDisguise(null);setVotes({});
+    setRole(chosen);setPhase("role");setTimer(360);setLights(true);setHatchPanic(false);setTasks({lamp:false,pond:false,hatch:false,shrine:false});setEmergencyLeft(1);setKillCooldown(12);setShiftCooldown(10);setDisguise(null);setVotes({});
     pos.current={...START};
     const bots=BOT_NAMES.map((name,i):Agent=>({id:"bot"+i,name,p:randPoint(i*31+7),alive:true,color:["#526858","#6b5f52","#4b606a","#6a4f55","#596149"][i],target:ZONES[ALL_ZONES[i%4]].p,speed:74+i*3,task:ALL_ZONES[i%4],cooldown:0,suspicion:0,tokenId:NPC_TOKEN_IDS[i],choreIndex:i%4,workUntil:0,lastZone:ALL_ZONES[i%4],lastAction:"heading to "+ZONES[ALL_ZONES[i%4]].name,personality:PERSONALITIES[i],reported:false,lastSeenName:null,lastSeenZone:ALL_ZONES[i%4],lastSeenAt:0}));
     if(chosen==="friend"){const culprit=PROFILE.seed%BOT_NAMES.length;bots[culprit]={...bots[culprit],id:"mimic",name:bots[culprit].name};}
@@ -789,7 +859,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     sound.current?.play("reward");
   }
 
-  const minute=Math.floor((240-timer)/40);const clock=["12:00","1:00","2:00","3:00","4:00","5:00","6:00"][Math.min(6,minute)];
+  const minute=Math.floor((360-timer)/60);const clock=["12:00","1:00","2:00","3:00","4:00","5:00","6:00"][Math.min(6,minute)];
   const roleLabel=role==="friend"?"FRIEND":"MIMIC";
 
   const sectionStyle={"--game-brightness":String(settings.brightness),"--grain-opacity":String(settings.grain/100)} as CSSProperties;
