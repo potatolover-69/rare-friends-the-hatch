@@ -64,11 +64,13 @@ The base deduction game remains playable without purchases.
 ## Competition polish
 
 - Expanded 3000 × 2100 Garden with named landmarks, collision-aware exploration, minimap and full map
-- Six-step animated first-time tutorial explaining movement, chores, gear, battery drain, reporting, meetings and voting
+- Eight-step animated first-time tutorial explaining movement, chores, gear, battery drain, reporting, meetings and voting
 - Finite flashlight charge with optional Battery Pack refills
 - Frozen corpse poses plus transparent spirits for murdered Keepers
 - Non-blocking toast notifications and a more readable UI font stack
 - Animated sunrise victory sequence with reward count-up and particles
+- Rain, puddle ripples, wet lamp reflections and moving Moon Pond highlights
+- Cinematic meeting statements now show each Keeper's Rare Friend portrait when available
 
 - Smarter social-deduction AI with real chore routes, memory and personality-driven meeting reports
 - Mimic deception that avoids direct identity giveaways
