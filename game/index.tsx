@@ -150,6 +150,23 @@ function createHatchAudio():HatchAudio|null{
   return {resume:async()=>{if(context.state==="suspended")await context.resume();},set,cue,dispose:()=>{try{drone.stop();tone.stop();void context.close();}catch{}}};
 }
 
+function FriendPortrait({sprites,name}:{sprites?:GenerationSprites;name:string}){
+  const ref=useRef<HTMLCanvasElement>(null);
+  useEffect(()=>{
+    const canvas=ref.current,ctx=canvas?.getContext("2d");if(!canvas||!ctx)return;
+    ctx.clearRect(0,0,canvas.width,canvas.height);ctx.imageSmoothingEnabled=false;
+    if(!sprites){
+      const g=ctx.createRadialGradient(48,52,4,48,52,46);g.addColorStop(0,"rgba(207,222,203,.28)");g.addColorStop(1,"rgba(207,222,203,0)");ctx.fillStyle=g;ctx.fillRect(0,0,96,112);
+      ctx.strokeStyle="rgba(220,232,216,.72)";ctx.lineWidth=2;ctx.strokeRect(30,20,36,66);ctx.fillStyle="#dce6d8";ctx.font="800 30px Inter,system-ui,sans-serif";ctx.textAlign="center";ctx.fillText(name.slice(0,1),48,64);return;
+    }
+    const rows=spriteFrame(sprites,"down",false,0,"right").frame.rows;
+    const size=5,ox=Math.round((96-(rows[0]?.length||16)*size)/2),oy=18;
+    rows.forEach((row,y)=>[...row].forEach((px,x)=>{if(px==="#"){ctx.fillStyle="rgba(224,233,220,.55)";ctx.fillRect(ox+x*size-1,oy+y*size-1,size+2,size+2);}}));
+    rows.forEach((row,y)=>[...row].forEach((px,x)=>{if(px==="#"){ctx.fillStyle="#050705";ctx.fillRect(ox+x*size,oy+y*size,size,size);}}));
+  },[sprites,name]);
+  return <canvas ref={ref} width={96} height={112} className="friend-portrait-canvas" aria-label={name+" Rare Friend portrait"}/>;
+}
+
 function drawFriend(ctx:CanvasRenderingContext2D,sprites:GenerationSprites,p:Point,facing:SpriteFacing,walking:boolean,frame:number,side:"left"|"right"){
   const rows=spriteFrame(sprites,facing,walking,frame,side).frame.rows;
   const scale=5,left=Math.round(p.x)-40,top=Math.round(p.y)-80;
@@ -490,7 +507,11 @@ function drawWorld(ctx:CanvasRenderingContext2D,t:number,lights:boolean,lightsFl
     ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.sin(i)*2,y-h);ctx.stroke();
   }
 
-  const paths=[[START,ZONES.hatch.p],[ZONES.hatch.p,ZONES.lamp.p],[ZONES.hatch.p,ZONES.pond.p],[ZONES.hatch.p,ZONES.shrine.p],[ZONES.lamp.p,LANDMARKS[0].p],[ZONES.shrine.p,LANDMARKS[1].p],[ZONES.pond.p,LANDMARKS[2].p],[ZONES.shrine.p,LANDMARKS[4].p]] as const;
+  const paths=[
+    [START,ZONES.hatch.p],[ZONES.hatch.p,ZONES.lamp.p],[ZONES.hatch.p,ZONES.pond.p],[ZONES.hatch.p,ZONES.shrine.p],
+    [ZONES.lamp.p,ZONES.shed.p],[ZONES.shrine.p,ZONES.ward.p],[ZONES.lamp.p,LANDMARKS[0].p],
+    [ZONES.pond.p,LANDMARKS[1].p],[ZONES.pond.p,LANDMARKS[2].p],[START,LANDMARKS[4].p]
+  ] as const;
   paths.forEach((p,i)=>drawStonePath(ctx,p[0],p[1],i+PROFILE.seed));
 
   ctx.strokeStyle="#2f3931";ctx.lineWidth=5;ctx.strokeRect(86,86,WORLD.width-172,WORLD.height-152);
@@ -555,6 +576,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const [agents,setAgents]=useState<Agent[]>([]);
   const [tasks,setTasks]=useState<Record<ZoneKey,boolean>>({lamp:false,pond:false,hatch:false,shrine:false,shed:false,ward:false});
   const [unstableTasks,setUnstableTasks]=useState<Record<ZoneKey,boolean>>({lamp:false,pond:false,hatch:false,shrine:false,shed:false,ward:false});
+  const tasksRef=useRef(tasks);
+  const [lastSabotagedZone,setLastSabotagedZone]=useState<ZoneKey|null>(null);
   const [lights,setLights]=useState(true);
   const [hatchPanic,setHatchPanic]=useState(false);
   const [meetingReason,setMeetingReason]=useState("");
@@ -608,6 +631,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   }
 
   useEffect(()=>{agentsRef.current=agents;},[agents]);
+  useEffect(()=>{tasksRef.current=tasks;},[tasks]);
 
   useEffect(()=>{
     sound.current=createFriendSoundKit({muted:true});
@@ -764,8 +788,11 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
           if(mimic?.alive){
             if(now-lastSabotage.current>18000){
               lastSabotage.current=now;
-              const sabotageZone=ALL_ZONES[(Math.floor(now/1000)+PROFILE.seed)%ALL_ZONES.length];
+              const secured=ALL_ZONES.filter(z=>tasksRef.current[z]);
+              const pool=secured.length?secured:ALL_ZONES;
+              const sabotageZone=pool[(Math.floor(now/1000)+PROFILE.seed)%pool.length];
               const zone=ZONES[sabotageZone].name;
+              setLastSabotagedZone(sabotageZone);
               setTasks(current=>({...current,[sabotageZone]:false}));
               setUnstableTasks(current=>({...current,[sabotageZone]:true}));
               if(sabotageZone==="lamp"){
@@ -877,7 +904,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   function start(){
     void hatchAudio.current?.resume();
     const chosen:Role="friend";
-    setRole(chosen);setPhase("role");setTimer(360);setLights(true);setLightsFlickering(false);setHatchPanic(false);setTasks({lamp:false,pond:false,hatch:false,shrine:false,shed:false,ward:false});setUnstableTasks({lamp:false,pond:false,hatch:false,shrine:false,shed:false,ward:false});setEmergencyLeft(1);setKillCooldown(12);setShiftCooldown(10);setDisguise(null);setVotes({});
+    setRole(chosen);setPhase("role");setTimer(360);setLights(true);setLightsFlickering(false);setHatchPanic(false);setTasks({lamp:false,pond:false,hatch:false,shrine:false,shed:false,ward:false});setUnstableTasks({lamp:false,pond:false,hatch:false,shrine:false,shed:false,ward:false});setLastSabotagedZone(null);setEmergencyLeft(1);setKillCooldown(12);setShiftCooldown(10);setDisguise(null);setVotes({});
     pos.current={...START};
     const bots=BOT_NAMES.map((name,i):Agent=>({id:"bot"+i,name,p:randPoint(i*31+7),alive:true,color:["#526858","#6b5f52","#4b606a","#6a4f55","#596149"][i],target:ZONES[ALL_ZONES[i%4]].p,speed:74+i*3,task:ALL_ZONES[i%4],cooldown:0,suspicion:0,tokenId:NPC_TOKEN_IDS[i],choreIndex:i%4,workUntil:0,lastZone:ALL_ZONES[i%4],lastAction:"heading to "+ZONES[ALL_ZONES[i%4]].name,personality:PERSONALITIES[i],reported:false,lastSeenName:null,lastSeenZone:ALL_ZONES[i%4],lastSeenAt:0}));
     if(chosen==="friend"){const culprit=PROFILE.seed%BOT_NAMES.length;bots[culprit]={...bots[culprit],id:"mimic",name:bots[culprit].name};}
@@ -905,7 +932,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   }
 
   function completeTask(zone:ZoneKey){
-    setTasks(v=>({...v,[zone]:true}));setUnstableTasks(v=>({...v,[zone]:false}));setMenu(null);setActivePuzzle(null);
+    setTasks(v=>({...v,[zone]:true}));setUnstableTasks(v=>({...v,[zone]:false}));if(lastSabotagedZone===zone)setLastSabotagedZone(null);setMenu(null);setActivePuzzle(null);
     const nextCount=tasksDone+1;
     setMessage(ZONES[zone].name+" stabilized. "+nextCount+"/"+ALL_ZONES.length+" containment tasks secure.");
     setRoundNotes(prev=>[...prev.slice(-7),"You completed "+ZONES[zone].name+"."]);
@@ -1036,8 +1063,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   function sabotage(kind:"lights"|"hatch"){
     if(role!=="mimic"||phase!=="play"||shiftCooldown>0)return;
     setShiftCooldown(12);
-    if(kind==="lights"){setLightsFlickering(true);setTasks(v=>({...v,lamp:false}));setUnstableTasks(v=>({...v,lamp:true}));setMessage("You overloaded Lamp Court. The lights begin to flicker.");setTimeout(()=>{setLightsFlickering(false);setLights(false);},1200);}
-    else{setHatchPanic(true);setTasks(v=>({...v,hatch:false}));setUnstableTasks(v=>({...v,hatch:true}));setMessage("You destabilized the Hatch. Its seal puzzle must be done again.");}
+    if(kind==="lights"){setLastSabotagedZone("lamp");setLightsFlickering(true);setTasks(v=>({...v,lamp:false}));setUnstableTasks(v=>({...v,lamp:true}));setMessage("You overloaded Lamp Court. The lights begin to flicker.");setTimeout(()=>{setLightsFlickering(false);setLights(false);},1200);}
+    else{setLastSabotagedZone("hatch");setHatchPanic(true);setTasks(v=>({...v,hatch:false}));setUnstableTasks(v=>({...v,hatch:true}));setMessage("You destabilized the Hatch. Its seal puzzle must be done again.");}
     sound.current?.play("impact");
   }
 
@@ -1103,7 +1130,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
 
     {phase==="play"&&<>
       <div className="hud mission"><span>{roleLabel} // {clock}</span><b>{role==="friend"?"KEEP THE HATCH SEALED":"BECOME ONE OF THEM"}</b><small>{role==="friend"?tasksDone+"/"+ALL_ZONES.length+" tasks · identify the Mimic":aliveAgents.length+" Keepers remain"}</small></div>
-      <div className="hud statusbox"><b>{lights?"LIGHTS ONLINE":"BLACKOUT"}</b><span>{hatchPanic?"HATCH SABOTAGED":"Containment stable"}</span></div>
+      <div className={"hud statusbox "+(lastSabotagedZone?"danger":"")}><b>{lightsFlickering?"VOLTAGE FAILURE":lights?"LIGHTS ONLINE":"BLACKOUT"}</b><span>{lastSabotagedZone?ZONES[lastSabotagedZone].name+" · REDO REQUIRED":hatchPanic?"HATCH SABOTAGED":"Containment stable"}</span></div>
       <div className="economy-hud"><b>{snapshot?.mode==="chain"?"FRIEND WALLET":"PREVIEW"} RF {formatRF(snapshot?.rfBalance)}</b><span>Spent {rfSpent.toFixed(2)} · Win +0.15–0.20* simulated</span></div>
       <div className="friend-badge"><b>FRIEND #{friendId.toString()}</b><span>{PROFILE.character} · {PROFILE.scenery} · {PROFILE.floor} · Gen {PROFILE.generation}</span></div>
       {currentZone&&<div className="zone-banner" key={currentZone}><b>{ZONES[currentZone].name.toUpperCase()}</b><span>{tasks[currentZone]?"SECURE":unstableTasks[currentZone]?"SABOTAGED · REPAIR REQUIRED":ZONES[currentZone].hint}</span></div>}
@@ -1132,7 +1159,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     {phase==="meeting"&&<div className={"overlay meeting meeting-"+meetingStage}>
       {meetingStage==="report"&&<div className="report-cinematic"><div className="report-pulse"/><span>BODY REPORTED</span><h2>{meetingReason}</h2><p>All surviving Keepers are being called to the Garden meeting.</p></div>}
       {meetingStage==="testimony"&&testimony[speakerIndex]&&<div className="speaker-cinematic" key={speakerIndex}>
-        <div className="speaker-camera"><div className="camera-scan"/><small>KEEPER STATEMENT {speakerIndex+1}/{testimony.length}</small><div className="speaker-silhouette">{testimony[speakerIndex].name==="UV Scanner"?"UV":testimony[speakerIndex].name.slice(0,1)}</div><b>{testimony[speakerIndex].name}</b>{agents.find(a=>a.name===testimony[speakerIndex].name)&&<em>Friend #{agents.find(a=>a.name===testimony[speakerIndex].name)?.tokenId.toString()}</em>}</div>
+        <div className="speaker-camera"><div className="camera-scan"/><small>KEEPER STATEMENT {speakerIndex+1}/{testimony.length}</small>{(()=>{const speaker=agents.find(a=>a.name===testimony[speakerIndex].name);return speaker?<FriendPortrait sprites={npcSprites[String(speaker.tokenId)]} name={speaker.name}/>:<div className="speaker-silhouette">{testimony[speakerIndex].name==="UV Scanner"?"UV":testimony[speakerIndex].name.slice(0,1)}</div>;})()}<b>{testimony[speakerIndex].name}</b>{agents.find(a=>a.name===testimony[speakerIndex].name)&&<em>Friend #{agents.find(a=>a.name===testimony[speakerIndex].name)?.tokenId.toString()}</em>}</div>
         <div className="speaker-dialogue"><span>LIVE TESTIMONY</span><p>“{testimony[speakerIndex].text}”</p><div className="speech-wave">{Array.from({length:18},(_,i)=><i key={i} style={{height:(6+((i*13+speakerIndex*7)%22))+"px"}}/>)}</div></div>
         <button className="skip-cinematic" onClick={()=>setMeetingStage("vote")}>SKIP TO VOTE</button>
       </div>}
@@ -1169,7 +1196,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       <p>Core chores are marked with diamonds. Explore named landmarks to learn routes and catch contradictions. Keepers are intentionally hidden from the map.</p>
       <div className="full-map-field">
         <svg className="map-routes" viewBox="0 0 3000 2100" preserveAspectRatio="none" aria-hidden="true"><path d="M1500 1870 L1510 1040 L620 920 M1510 1040 L2380 1280 M1510 1040 L2360 430 M620 920 L430 1640 M2360 430 L1730 360 M2380 1280 L2440 1690"/><ellipse cx="2380" cy="1280" rx="210" ry="120"/><circle cx="720" cy="350" r="145"/></svg>
-        {ALL_ZONES.map(z=><div key={z} className={"map-marker zone "+(tasks[z]?"done":unstableTasks[z]?"unstable":"")} style={{left:(ZONES[z].p.x/WORLD.width*100)+"%",top:(ZONES[z].p.y/WORLD.height*100)+"%"}}><i/><span>{ZONES[z].name}{tasks[z]?" ✓":""}</span></div>)}
+        {ALL_ZONES.map(z=><div key={z} className={"map-marker zone "+(tasks[z]?"done":unstableTasks[z]?"unstable":"")} style={{left:(ZONES[z].p.x/WORLD.width*100)+"%",top:(ZONES[z].p.y/WORLD.height*100)+"%"}}><i/><span>{ZONES[z].name}{tasks[z]?" ✓":unstableTasks[z]?" · SABOTAGED":""}</span></div>)}
         {LANDMARKS.map(l=><div key={l.name} className="map-marker landmark" style={{left:(l.p.x/WORLD.width*100)+"%",top:(l.p.y/WORLD.height*100)+"%"}}><i/><span>{l.name}</span></div>)}
         <div className="map-marker player" style={{left:(pos.current.x/WORLD.width*100)+"%",top:(pos.current.y/WORLD.height*100)+"%"}}><i/><span>YOU</span></div>
       </div>
