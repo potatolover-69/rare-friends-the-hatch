@@ -65,12 +65,14 @@ const NPC_TOKEN_IDS=[334130n,334131n,334132n,334133n,334134n];
 const PERSONALITIES:Personality[]=["careful","nervous","direct","quiet","watchful"];
 const DEFAULT_SETTINGS:GameSettings={graphics:"high",fps:60,cameraZoom:1,brightness:1,fog:55,grain:22,master:75,music:42,ambience:62,sfx:78,reducedMotion:false,screenShake:true,hints:true};
 const TUTORIAL_STEPS=[
-  {eyebrow:"01 · MOVE + EXPLORE",title:"Learn the Garden",body:"Use WASD, Arrow keys, or tap the ground. The Garden is larger now, trees and rocks block movement, and M opens the full map.",key:"WASD / TAP · M MAP"},
-  {eyebrow:"02 · DO CHORES",title:"Build Your Alibi",body:"Visit the six marked containment stations. Press E when the action button says PUZZLE or REPAIR, then solve that station's mini-puzzle. Watch which Keepers work nearby and remember their routes.",key:"E · INTERACT"},
-  {eyebrow:"03 · RF NIGHT MARKET",title:"Gear Has a Cost",body:"Press G to open the shop. Flashlights, batteries, UV scans, flares and wards use simulated RF. The flashlight drains while switched on, so conserve it and use a Battery Pack when empty.",key:"G SHOP · F FLASHLIGHT"},
-  {eyebrow:"04 · REPORT BODIES",title:"Death Leaves Evidence",body:"A murdered Keeper freezes where they fell. Their body stays on the ground with a faint spirit beside it. Stand close and press R to call a meeting.",key:"R · REPORT"},
-  {eyebrow:"05 · MEET + VOTE",title:"Everyone Has a Story",body:"Read every Keeper report, compare it with system evidence and what you personally saw, then vote. The Mimic also speaks and can lie. A wrong vote makes the night more dangerous.",key:"READ · COMPARE · VOTE"},
-  {eyebrow:"06 · SURVIVE",title:"Expose the Mimic",body:"Finish chores, survive sabotage and eject the Mimic before sunrise. Winning grants a small simulated RF reward; spending remains optional for the base game.",key:"SURVIVE · EJECT · EARN"},
+  {eyebrow:"01 · MOVE + EXPLORE",title:"Enter the Garden",body:"Use WASD, Arrow keys, or tap the ground. Trees, rocks and structures have collision, so follow the wet paths and learn the landmarks.",key:"WASD / TAP"},
+  {eyebrow:"02 · USE THE MAP",title:"Know Where You Are",body:"Press M for the full Garden map. It shows six containment stations, roads, landmarks, completed tasks and sabotaged stations — but never reveals the Mimic.",key:"M · MAP"},
+  {eyebrow:"03 · SOLVE TASKS",title:"Containment Takes Work",body:"At a station press E when the action says PUZZLE or REPAIR. Each station has a different mini-puzzle. Completed stations build your alibi and stabilize the Garden.",key:"E · PUZZLE / REPAIR"},
+  {eyebrow:"04 · BUY + USE GEAR",title:"RF Night Market",body:"Press G to buy optional simulated-RF gear. Flashlight charge drains only while ON; Battery Packs refill it. Flares restore light, UV helps meetings and Wards counter Hatch sabotage.",key:"G SHOP · F LIGHT"},
+  {eyebrow:"05 · SURVIVE SABOTAGE",title:"The Mimic Can Undo Progress",body:"A secure station can be sabotaged and marked unstable. Lamp Court sabotage makes street lights flicker before blackout. Return to the marked station and solve its puzzle again.",key:"WATCH THE HUD + MAP"},
+  {eyebrow:"06 · REPORT THE DEAD",title:"Bodies Stay in the Garden",body:"A murdered Keeper freezes where they fell and a faint spirit remains beside the body. Stand close and press R to report. Another Keeper can discover the body first.",key:"R · REPORT"},
+  {eyebrow:"07 · LISTEN + VOTE",title:"Everyone Has a Story",body:"Reports trigger cinematic statements from every survivor. Compare what they claim with system evidence and what you personally saw. The Mimic speaks too and can lie. A wrong vote does not end the round.",key:"READ · COMPARE · VOTE"},
+  {eyebrow:"08 · EXPOSE THE MIMIC",title:"Survive Until Sunrise",body:"Keep the Garden stable and identify the Mimic before the team is wiped out. Winning shows a small simulated RF reward; spending is optional for the base deduction game.",key:"SURVIVE · EJECT · EARN"},
 ] as const;
 
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
@@ -455,6 +457,40 @@ function drawLandmarks(ctx:CanvasRenderingContext2D){
   }
 }
 
+function drawWetReflections(ctx:CanvasRenderingContext2D,lights:boolean,lightsFlickering:boolean,t:number){
+  const reflect=[...ROAD_LIGHTS,{x:ZONES.lamp.p.x-135,y:ZONES.lamp.p.y-45},{x:ZONES.lamp.p.x+135,y:ZONES.lamp.p.y-45}];
+  for(let i=0;i<reflect.length;i++){
+    const p=reflect[i],flicker=lightsFlickering?(Math.sin(t*.055+(i+20)*3)>0?.9:.04):1;
+    const power=(lights?1:lightsFlickering?.6:0)*flicker;
+    if(power<=.02)continue;
+    ctx.save();
+    ctx.globalAlpha=.16*power;
+    const rg=ctx.createLinearGradient(p.x,p.y+5,p.x,p.y+150);rg.addColorStop(0,"rgba(255,226,157,.8)");rg.addColorStop(1,"rgba(255,226,157,0)");
+    ctx.fillStyle=rg;ctx.beginPath();ctx.ellipse(p.x,p.y+44,22,76,0,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=.11*power;ctx.strokeStyle="#f6e7bc";ctx.lineWidth=1;
+    for(let j=0;j<4;j++){const y=p.y+32+j*18+Math.sin(t/350+j+i)*3;ctx.beginPath();ctx.moveTo(p.x-19+j*2,y);ctx.lineTo(p.x+19-j*2,y);ctx.stroke();}
+    ctx.restore();
+  }
+}
+
+function drawRainScreen(ctx:CanvasRenderingContext2D,t:number,quality:GameSettings["graphics"]){
+  const drops=quality==="low"?28:quality==="medium"?46:quality==="high"?68:92;
+  ctx.save();ctx.lineWidth=1;
+  for(let i=0;i<drops;i++){
+    const seed=i*977+PROFILE.seed;
+    const x=((seed+(t*.26)*(1+(i%3)*.18))%(VIEW.width+140))-70;
+    const y=((seed*1.73+(t*.58)*(1+(i%4)*.11))%(VIEW.height+120))-80;
+    const len=8+(i%7)*2;
+    ctx.strokeStyle=i%6===0?"rgba(210,224,218,.17)":"rgba(184,204,196,.10)";
+    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-4-len*.12,y+len);ctx.stroke();
+  }
+  for(let i=0;i<6;i++){
+    const phase=(t/880+i*.19)%1,x=(i*173+91)%VIEW.width,y=470+(i*47)%150,r=2+phase*11;
+    ctx.strokeStyle="rgba(191,211,203,"+(0.10*(1-phase))+")";ctx.beginPath();ctx.ellipse(x,y,r,r*.3,0,0,Math.PI*2);ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function drawTaskStructures(ctx:CanvasRenderingContext2D){
   const shed=ZONES.shed.p;
   ctx.save();ctx.translate(shed.x,shed.y);
@@ -523,6 +559,7 @@ function drawWorld(ctx:CanvasRenderingContext2D,t:number,lights:boolean,lightsFl
   drawLandmarks(ctx);
   drawTaskStructures(ctx);
   ROAD_LIGHTS.forEach((lp,i)=>drawStreetLamp(ctx,lp,lights,lightsFlickering,t,i+20));
+  drawWetReflections(ctx,lights,lightsFlickering,t);
 
   drawLampCourt(ctx,lights,lightsFlickering,t);
   drawPond(ctx,t);
@@ -695,7 +732,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
         const t=setTimeout(()=>setMeetingStage("vote"),1850);
         return()=>clearTimeout(t);
       }
-      const t=setTimeout(()=>setSpeakerIndex(v=>Math.min(testimony.length-1,v+1)),2100);
+      const t=setTimeout(()=>setSpeakerIndex(v=>Math.min(testimony.length-1,v+1)),3200);
       return()=>clearTimeout(t);
     }
   },[phase,meetingStage,speakerIndex,testimony.length]);
@@ -863,6 +900,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
         else if(a.lastAction!=="expelled by vote"){if(sp)drawDeadNpcFriend(ctx,sp,a,now);else drawDeadKeeper(ctx,a,now);}
       });
       ctx.restore();
+      drawRainScreen(ctx,now,settings.graphics);
 
       // Screen-space mist and drifting particles.
       ctx.save();
@@ -1161,7 +1199,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       {meetingStage==="testimony"&&testimony[speakerIndex]&&<div className="speaker-cinematic" key={speakerIndex}>
         <div className="speaker-camera"><div className="camera-scan"/><small>KEEPER STATEMENT {speakerIndex+1}/{testimony.length}</small>{(()=>{const speaker=agents.find(a=>a.name===testimony[speakerIndex].name);return speaker?<FriendPortrait sprites={npcSprites[String(speaker.tokenId)]} name={speaker.name}/>:<div className="speaker-silhouette">{testimony[speakerIndex].name==="UV Scanner"?"UV":testimony[speakerIndex].name.slice(0,1)}</div>;})()}<b>{testimony[speakerIndex].name}</b>{agents.find(a=>a.name===testimony[speakerIndex].name)&&<em>Friend #{agents.find(a=>a.name===testimony[speakerIndex].name)?.tokenId.toString()}</em>}</div>
         <div className="speaker-dialogue"><span>LIVE TESTIMONY</span><p>“{testimony[speakerIndex].text}”</p><div className="speech-wave">{Array.from({length:18},(_,i)=><i key={i} style={{height:(6+((i*13+speakerIndex*7)%22))+"px"}}/>)}</div></div>
-        <button className="skip-cinematic" onClick={()=>setMeetingStage("vote")}>SKIP TO VOTE</button>
+        <div className="cinematic-controls">{speakerIndex<testimony.length-1&&<button onClick={()=>setSpeakerIndex(v=>Math.min(testimony.length-1,v+1))}>NEXT STATEMENT</button>}<button onClick={()=>setMeetingStage("vote")}>SKIP TO VOTE</button></div>
       </div>}
       {meetingStage==="vote"&&<div className="meeting-card"><span>GARDEN MEETING</span><h2>{meetingReason}</h2><p>Who doesn't belong here?</p><div className="meeting-guide"><span>1 · READ REPORTS</span><span>2 · CHECK EVIDENCE</span><span>3 · VOTE OR SKIP</span></div><div className="testimony"><b>KEEPER REPORTS</b>{testimony.map((t,i)=><div key={i}><strong>{t.name}</strong><span>{t.text}</span></div>)}</div><div className="evidence"><b>SYSTEM EVIDENCE</b>{evidence.map((e,i)=><span key={i}>• {e}</span>)}</div><div className="vote-grid">{agents.filter(a=>a.alive).map(a=><button key={a.id} onClick={()=>vote(a.id)}><b>{a.name}</b><small>{votes[a.id]?votes[a.id]+" votes":"VOTE"}</small></button>)}</div><button className="skip" onClick={()=>{setMessage("No one was ejected. The Mimic is still among the Keepers.");setPhase("play");}}>SKIP VOTE</button></div>}
     </div>}
@@ -1208,7 +1246,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       <button className="tutorial-close" onClick={()=>{setTutorialSeen(true);setMenu(null);}}>×</button>
       <div className="tutorial-progress">{TUTORIAL_STEPS.map((_,i)=><i key={i} className={i<=tutorialStep?"active":""}/>)}</div>
       <span>{TUTORIAL_STEPS[tutorialStep].eyebrow}</span><h2>{TUTORIAL_STEPS[tutorialStep].title}</h2><p>{TUTORIAL_STEPS[tutorialStep].body}</p>
-      <div className={"tutorial-visual step-"+tutorialStep}><div className="tutorial-friend">FRIEND</div><div className="tutorial-icon">{["↗","✓","RF","☠","?","☀"][tutorialStep]}</div><div className="tutorial-key">{TUTORIAL_STEPS[tutorialStep].key}</div></div>
+      <div className={"tutorial-visual step-"+tutorialStep}><div className="tutorial-friend">FRIEND</div><div className="tutorial-icon">{["↗","MAP","✓","RF","!","☠","?","☀"][tutorialStep]}</div><div className="tutorial-key">{TUTORIAL_STEPS[tutorialStep].key}</div></div>
       <div className="tutorial-actions"><button disabled={tutorialStep===0} onClick={()=>setTutorialStep(v=>Math.max(0,v-1))}>BACK</button>{tutorialStep<TUTORIAL_STEPS.length-1?<button onClick={()=>setTutorialStep(v=>Math.min(TUTORIAL_STEPS.length-1,v+1))}>NEXT</button>:<button onClick={()=>{setTutorialSeen(true);setMenu(null);setMessage("Tutorial complete. Use M for the map and G for the Night Market.");}}>ENTER THE GARDEN</button>}</div>
     </div></div>}
 
