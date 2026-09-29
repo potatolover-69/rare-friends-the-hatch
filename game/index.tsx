@@ -54,6 +54,11 @@ const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 const dist=(a:Point,b:Point)=>Math.hypot(a.x-b.x,a.y-b.y);
 const near=(a:Point,b:Point,r=95)=>dist(a,b)<r;
 const randPoint=(seed:number)=>({x:220+((seed*811)%1660),y:190+((seed*557)%990)});
+const formatRF=(value:bigint|undefined)=>{
+  if(value===undefined)return "—";
+  const RF=10n**18n,whole=value/RF,frac=(value%RF)*100n/RF;
+  return whole.toString()+"."+frac.toString().padStart(2,"0");
+};
 
 type HatchAudio={
   resume:()=>Promise<void>;
@@ -796,6 +801,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     {phase==="play"&&<>
       <div className="hud mission"><span>{roleLabel} // {clock}</span><b>{role==="friend"?"KEEP THE HATCH SEALED":"BECOME ONE OF THEM"}</b><small>{role==="friend"?tasksDone+"/4 tasks · identify the saboteur":aliveAgents.length+" Keepers remain"}</small></div>
       <div className="hud statusbox"><b>{lights?"LIGHTS ONLINE":"BLACKOUT"}</b><span>{hatchPanic?"HATCH SABOTAGED":"Containment stable"}</span></div>
+      <div className="economy-hud"><b>{snapshot?.mode==="chain"?"FRIEND WALLET":"PREVIEW"} RF {formatRF(snapshot?.rfBalance)}</b><span>Spent {rfSpent.toFixed(2)} · Win +0.40* simulated</span></div>
+      <div className="friend-badge"><b>FRIEND #{friendId.toString()}</b><span>{PROFILE.character} · {PROFILE.scenery} · {PROFILE.floor} · Gen {PROFILE.generation}</span></div>
       <button className="settings-fab" onClick={()=>setMenu("settings")} aria-label="Settings">⚙</button>
       {settings.hints&&role==="friend"&&<div className="hint-chip">{tasksDone<4?"NEXT · "+ZONES[ALL_ZONES.find(z=>!tasks[z])||"hatch"].name:"Watch routes · compare testimony · eject the Mimic"}</div>}
       {role==="friend"&&<div className="task-list">{ALL_ZONES.map(z=><span key={z} className={tasks[z]?"done":""}>{tasks[z]?"✓":"□"} {ZONES[z].name}</span>)}</div>}
@@ -818,7 +825,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     {(phase==="won"||phase==="lost")&&<div className="overlay"><div className={"end-card "+phase}><span>{phase==="won"?"NIGHT SURVIVED":"CONTAINMENT FAILED"}</span><h1>{phase==="won"?"SUNRISE":"REPLACED"}</h1><p>{message}</p><div className="ledger"><span>Role {roleLabel}</span><span>Tasks {tasksDone}/4</span><span>RF spent {rfSpent.toFixed(2)}</span><span>RF earned {rfEarned.toFixed(2)}*</span><span>Mimic {agents.find(a=>a.id==="mimic")?.name||"Unknown"}</span><span>*MVP reward simulated</span></div><div className="round-recap"><b>NIGHT LOG</b>{roundNotes.slice(-5).map((n,i)=><span key={i}>• {n}</span>)}</div><button onClick={start}>PLAY AGAIN</button></div></div>}
 
     {menu==="inventory"&&<GameMenu title="RF NIGHT MARKET" onClose={()=>setMenu(null)}><div className="item-menu">
-      <p className="economy-note">MVP economy: purchases exercise FriendSDK token activity. Burn/sink intent and win rewards are simulated for the Vibeathon prototype.</p>
+      <p className="economy-note">MVP economy · <b>{snapshot?.mode==="chain"?"Friend wallet":"Preview"} RF {formatRF(snapshot?.rfBalance)}</b>. Purchases exercise FriendSDK token activity. Burn/sink intent and win rewards are simulated for the Vibeathon prototype.</p>
       <button disabled={busy} onClick={()=>void buyItem("flashlight",1)}><b>Flashlight · 0.10 RF</b><small>Toggle with F. Adds a warm directional beam during blackouts.</small></button>
       <button disabled={busy} onClick={()=>void buyItem("uv",2)}><b>UV Scanner · 0.20 RF</b><small>Adds a system inconsistency clue during meetings.</small></button>
       <button disabled={busy} onClick={()=>void buyItem("flare",3)}><b>Emergency Flare · 0.30 RF</b><small>Consumes one flare to restore full Garden lighting immediately.</small></button>
