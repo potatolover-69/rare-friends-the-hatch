@@ -83,6 +83,19 @@ function moveWithCollision(p:Point,vx:number,vy:number){
   const nextY={x:p.x,y:clamp(p.y+vy,120,WORLD.height-120)};
   if(!blocked(nextY))p.y=nextY.y;
 }
+function advanceAgent(p:Point,vx:number,vy:number,seed:number){
+  const next={...p};
+  const nx={x:clamp(next.x+vx,130,WORLD.width-130),y:next.y};
+  if(!blocked(nx))next.x=nx.x;
+  const ny={x:next.x,y:clamp(next.y+vy,130,WORLD.height-130)};
+  if(!blocked(ny))next.y=ny.y;
+  if(next.x===p.x&&next.y===p.y){
+    const sign=seed%2===0?1:-1;
+    const side={x:clamp(p.x-vy*sign*1.4,130,WORLD.width-130),y:clamp(p.y+vx*sign*1.4,130,WORLD.height-130)};
+    if(!blocked(side))return side;
+  }
+  return next;
+}
 const formatRF=(value:bigint|undefined)=>{
   if(value===undefined)return "—";
   const RF=10n**18n,whole=value/RF,frac=(value%RF)*100n/RF;
@@ -622,7 +635,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
           }
 
           const vx=target.x-a.p.x,vy=target.y-a.p.y,d=Math.max(1,Math.hypot(vx,vy));
-          return {...a,target,choreIndex,workUntil,lastZone,lastAction,lastSeenName,lastSeenZone,lastSeenAt,p:{x:clamp(a.p.x+vx/d*a.speed*dt,140,WORLD.width-140),y:clamp(a.p.y+vy/d*a.speed*dt,140,WORLD.height-140)}};
+          const nextP=advanceAgent(a.p,vx/d*a.speed*dt,vy/d*a.speed*dt,i+a.choreIndex);
+          return {...a,target,choreIndex,workUntil,lastZone,lastAction,lastSeenName,lastSeenZone,lastSeenAt,p:nextP};
         });
         agentsRef.current=moved;
         frameSync.current++;
