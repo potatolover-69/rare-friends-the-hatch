@@ -1237,11 +1237,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   }
 
   function sabotage(kind:"lights"|"hatch"){
-    if(role!=="mimic"||phase!=="play"||shiftCooldown>0)return;
-    setShiftCooldown(12);
-    if(kind==="lights"){setLastSabotagedZone("lamp");setLightsFlickering(true);setTasks(v=>({...v,lamp:false}));setUnstableTasks(v=>({...v,lamp:true}));setMessage("You overloaded Lamp Court. The lights begin to flicker.");setTimeout(()=>{setLightsFlickering(false);setLights(false);},1200);}
-    else{setLastSabotagedZone("hatch");setHatchPanic(true);setTasks(v=>({...v,hatch:false}));setUnstableTasks(v=>({...v,hatch:true}));setMessage("You destabilized the Hatch. Its seal puzzle must be done again.");}
-    sound.current?.play("impact");
+    if(role!=="mimic"||phase!=="play"||shiftCooldown>0||sabotageRef.current)return;
+    setShiftCooldown(12);triggerSabotage(kind==="lights"?"lamp":"hatch");
   }
 
   function shapeshift(){
@@ -1286,14 +1283,20 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
 
   function useFlare(){
     if(inventory.flare<=0||phase!=="play")return;
-    setInventory(v=>({...v,flare:v.flare-1}));setLightsFlickering(false);setLights(true);setMessage("Emergency Flare ignited — the whole Garden is lit again.");
+    setInventory(v=>({...v,flare:v.flare-1}));setLightsFlickering(false);setLights(true);
+    setMessage("Emergency Flare burning — temporary light for 12 seconds. It does NOT repair the sabotaged circuit.");
     sound.current?.play("reward");
+    window.setTimeout(()=>{if(sabotageRef.current?.zone==="lamp")setLights(false);},12000);
   }
 
   function useWard(){
     if(inventory.ward<=0||phase!=="play")return;
-    setInventory(v=>({...v,ward:v.ward-1}));setHatchPanic(false);setMessage("Ward consumed — Hatch sabotage stabilized immediately.");
+    if(sabotageRef.current?.zone!=="hatch"){setMessage("The Ward only cancels an active Central Hatch breach.");return;}
+    setInventory(v=>({...v,ward:v.ward-1}));
+    const nextTasks={...tasksRef.current,hatch:true};tasksRef.current=nextTasks;setTasks(nextTasks);setUnstableTasks(v=>({...v,hatch:false}));
+    setHatchPanic(false);clearSabotage("hatch");setMessage("Containment Ward consumed — the Hatch breach is sealed instantly.");
     sound.current?.play("reward");
+    if(Object.values(nextTasks).every(Boolean)&&mimicCaughtRef.current)finish("won","Containment complete. The Mimic was identified and every station is secure.");
   }
 
   const minute=Math.floor((360-timer)/60);const clock=["12:00","1:00","2:00","3:00","4:00","5:00","6:00"][Math.min(6,minute)];
