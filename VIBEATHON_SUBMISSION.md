@@ -68,7 +68,7 @@ A successful round displays a **small simulated +0.15 RF reward, increased to +0
 
 - The Garden is expanded to a 3000 × 2100 scrolling world with named landmarks, longer routes and collision against tree trunks and rocks.
 - A clickable minimap plus a full **M** map shows the player, six puzzle stations, route lines, water/landmark context and exploration landmarks without revealing Keeper positions.
-- First-time players receive a six-step animated tutorial covering movement, chores, the RF shop, flashlight batteries, reporting bodies, meeting testimony, voting and winning.
+- First-time players receive a eight-step animated tutorial covering movement, chores, the RF shop, flashlight batteries, reporting bodies, meeting testimony, voting and winning.
 - Temporary gameplay messages use short non-blocking toast notifications instead of covering the action bar.
 - Murdered Keepers stop moving, remain in a corpse pose and display a faint transparent spirit beside the body.
 - Victory has a sunrise animation, particles, a count-up simulated RF reward and a post-round investigation log.
@@ -103,6 +103,7 @@ npm run build
 - **Deduction-first AI:** Keepers perform visible chores, remember nearby Friends and give personality-driven testimony; AI votes use suspicion and memory rather than knowing the Mimic's identity.
 - **Sneakier Mimic:** it spends most of the round following legitimate chore routes, takes short context-aware detours, avoids witnesses before kills and lies during meetings.
 - **Readable horror:** global moonlight keeps navigation clear; blackout remains threatening without turning the world into a player-centered black bubble.
+- **Weather/grounding:** rain, wet-ground reflections, puddle ripples, route streetlights and animated Moon Pond reflections give the procedural Garden more physical depth.
 - **Premium settings:** Low/Medium/High/Ultra graphics presets, 30/60/120 FPS caps, camera zoom, brightness, fog, film grain, screen shake, reduced motion, objective hints, and separate master/music/ambience/SFX controls.
 - **Procedural audio:** a low Garden drone and event stingers are synthesized in-browser, so the preview does not depend on external audio files.
 - **Judge-friendly HUD:** selected Friend identity, live preview RF balance, RF spent, simulated reward messaging, contextual interaction labels and a post-round night log are visible in-game.
