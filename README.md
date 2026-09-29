@@ -45,6 +45,16 @@ The base deduction game remains playable without purchases.
 - Meeting — call one emergency meeting
 - Shop / Gear — open the RF Night Market
 
+## Competition polish
+
+- Smarter social-deduction AI with real chore routes, memory and personality-driven meeting reports
+- Mimic deception that avoids direct identity giveaways
+- Premium sliding settings with graphics preset, FPS cap, zoom, brightness, fog, grain, motion/accessibility and full audio controls
+- Procedural ambience and event stingers
+- Context-sensitive interaction prompts
+- Live Friend / RF economy HUD plus a post-round investigation log
+- Performance presets that change world detail and particle density
+
 ## Development
 
 Requires Node.js 22+.
