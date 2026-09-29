@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { GameComponentProps } from "@rarefriends/friendsdk/runtime";
 import { GameMenu } from "@rarefriends/friendsdk/frame";
 import type { GameSnapshot } from "@rarefriends/friendsdk/game";
@@ -13,7 +13,24 @@ type Role="friend"|"mimic";
 type Phase="title"|"role"|"play"|"meeting"|"won"|"lost";
 type ZoneKey="lamp"|"pond"|"hatch"|"shrine";
 type Menu="store"|"inventory"|"settings"|null;
-type Agent={id:string;name:string;p:Point;alive:boolean;color:string;target:Point;speed:number;task:ZoneKey|null;cooldown:number;suspicion:number;tokenId:bigint;choreIndex:number;workUntil:number;lastZone:ZoneKey;lastAction:string};
+type Personality="careful"|"nervous"|"direct"|"quiet"|"watchful";
+type SettingsTab="graphics"|"audio"|"gameplay";
+type GameSettings={
+  graphics:"low"|"medium"|"high"|"ultra";
+  fps:30|60|120;
+  cameraZoom:number;
+  brightness:number;
+  fog:number;
+  grain:number;
+  master:number;
+  music:number;
+  ambience:number;
+  sfx:number;
+  reducedMotion:boolean;
+  screenShake:boolean;
+  hints:boolean;
+};
+type Agent={id:string;name:string;p:Point;alive:boolean;color:string;target:Point;speed:number;task:ZoneKey|null;cooldown:number;suspicion:number;tokenId:bigint;choreIndex:number;workUntil:number;lastZone:ZoneKey;lastAction:string;personality:Personality;reported:boolean;lastSeenName:string|null;lastSeenZone:ZoneKey;lastSeenAt:number};
 
 const VIEW={width:960,height:640};
 const WORLD={width:2100,height:1420};
@@ -30,11 +47,53 @@ const ZONES:Record<ZoneKey,{name:string;p:Point;hint:string}>={
 const ALL_ZONES=Object.keys(ZONES) as ZoneKey[];
 const BOT_NAMES=["Moth","Reed","Vale","Ash","Ivy"];
 const NPC_TOKEN_IDS=[334130n,334131n,334132n,334133n,334134n];
+const PERSONALITIES:Personality[]=["careful","nervous","direct","quiet","watchful"];
+const DEFAULT_SETTINGS:GameSettings={graphics:"high",fps:60,cameraZoom:1,brightness:1,fog:55,grain:22,master:75,music:42,ambience:62,sfx:78,reducedMotion:false,screenShake:true,hints:true};
 
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 const dist=(a:Point,b:Point)=>Math.hypot(a.x-b.x,a.y-b.y);
 const near=(a:Point,b:Point,r=95)=>dist(a,b)<r;
 const randPoint=(seed:number)=>({x:220+((seed*811)%1660),y:190+((seed*557)%990)});
+
+type HatchAudio={
+  resume:()=>Promise<void>;
+  set:(settings:GameSettings,muted:boolean)=>void;
+  cue:(kind:"meeting"|"danger"|"task"|"vote"|"win"|"lose")=>void;
+  dispose:()=>void;
+};
+
+function createHatchAudio():HatchAudio|null{
+  if(typeof window==="undefined")return null;
+  const AudioCtor=window.AudioContext||(window as typeof window & {webkitAudioContext?:typeof AudioContext}).webkitAudioContext;
+  if(!AudioCtor)return null;
+  const context=new AudioCtor();
+  const master=context.createGain(),music=context.createGain(),ambience=context.createGain(),sfx=context.createGain();
+  master.connect(context.destination);music.connect(master);ambience.connect(master);sfx.connect(master);
+
+  const drone=context.createOscillator(),droneFilter=context.createBiquadFilter(),droneGain=context.createGain();
+  drone.type="sine";drone.frequency.value=55;droneFilter.type="lowpass";droneFilter.frequency.value=180;droneGain.gain.value=.025;
+  drone.connect(droneFilter).connect(droneGain).connect(ambience);drone.start();
+
+  const tone=context.createOscillator(),toneGain=context.createGain();
+  tone.type="triangle";tone.frequency.value=82.5;toneGain.gain.value=.012;tone.connect(toneGain).connect(music);tone.start();
+
+  const set=(settings:GameSettings,muted:boolean)=>{
+    const off=muted?0:1;
+    master.gain.setTargetAtTime(off*settings.master/100,context.currentTime,.08);
+    music.gain.setTargetAtTime(settings.music/100,context.currentTime,.08);
+    ambience.gain.setTargetAtTime(settings.ambience/100,context.currentTime,.08);
+    sfx.gain.setTargetAtTime(settings.sfx/100,context.currentTime,.04);
+  };
+  const cue=(kind:"meeting"|"danger"|"task"|"vote"|"win"|"lose")=>{
+    if(context.state!=="running")return;
+    const osc=context.createOscillator(),gain=context.createGain();
+    const freq={meeting:196,danger:73,task:392,vote:220,win:523.25,lose:82.5}[kind];
+    osc.type=kind==="danger"||kind==="lose"?"sawtooth":"sine";osc.frequency.value=freq;
+    gain.gain.setValueAtTime(0,context.currentTime);gain.gain.linearRampToValueAtTime(.11,context.currentTime+.015);gain.gain.exponentialRampToValueAtTime(.001,context.currentTime+.32);
+    osc.connect(gain).connect(sfx);osc.start();osc.stop(context.currentTime+.34);
+  };
+  return {resume:async()=>{if(context.state==="suspended")await context.resume();},set,cue,dispose:()=>{try{drone.stop();tone.stop();void context.close();}catch{}}};
+}
 
 function drawFriend(ctx:CanvasRenderingContext2D,sprites:GenerationSprites,p:Point,facing:SpriteFacing,walking:boolean,frame:number,side:"left"|"right"){
   const rows=spriteFrame(sprites,facing,walking,frame,side).frame.rows;
@@ -63,6 +122,28 @@ function drawNpcFriend(ctx:CanvasRenderingContext2D,sprites:GenerationSprites,a:
   ctx.fillStyle="#e8eee5";ctx.font="700 9px ui-monospace";ctx.textAlign="center";ctx.shadowColor="#000";ctx.shadowBlur=4;
   ctx.fillText(a.name+" · #"+a.tokenId.toString(),a.p.x,a.p.y+27);
   if(a.workUntil>t){ctx.fillStyle="rgba(232,239,228,.72)";ctx.font="700 8px ui-monospace";ctx.fillText("WORKING",a.p.x,a.p.y+39);}
+  ctx.restore();
+}
+
+function drawChoreEffect(ctx:CanvasRenderingContext2D,a:Agent,t:number){
+  if(a.workUntil<=t||!a.alive)return;
+  const zone=ALL_ZONES.reduce((best,z)=>dist(a.p,ZONES[z].p)<dist(a.p,ZONES[best].p)?z:best,ALL_ZONES[0]);
+  ctx.save();ctx.translate(a.p.x,a.p.y);
+  const pulse=.55+Math.sin(t/110)*.25;
+  if(zone==="lamp"){
+    ctx.strokeStyle="rgba(255,231,158,"+pulse+")";ctx.lineWidth=2;
+    for(let i=0;i<4;i++){const x=-18+i*12,y=-34-Math.sin(t/80+i)*8;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+4,y-7);ctx.stroke();}
+  }else if(zone==="pond"){
+    ctx.strokeStyle="rgba(181,215,210,"+(.35+pulse*.25)+")";ctx.lineWidth=2;
+    ctx.beginPath();ctx.ellipse(0,5,24+Math.sin(t/140)*6,8+Math.sin(t/140)*2,0,0,Math.PI*2);ctx.stroke();
+  }else if(zone==="hatch"){
+    ctx.strokeStyle="rgba(205,214,202,"+pulse+")";ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(0,-20,13,t/180,t/180+Math.PI*1.45);ctx.stroke();
+    ctx.fillStyle="rgba(216,225,211,.75)";ctx.fillRect(9,-33,4,17);
+  }else{
+    ctx.strokeStyle="rgba(208,220,203,"+pulse+")";ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(-16,-20);ctx.lineTo(0,-38);ctx.lineTo(16,-20);ctx.lineTo(0,-8);ctx.closePath();ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -274,6 +355,9 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const keys=useRef(new Set<string>());
   const destination=useRef<Point|null>(null);
   const sound=useRef<FriendSoundKit|null>(null);
+  const hatchAudio=useRef<HatchAudio|null>(null);
+  const shakeUntil=useRef(0);
+  const lastFrameDraw=useRef(0);
   const facing=useRef<SpriteFacing>("up");
   const side=useRef<"left"|"right">("right");
   const lastKill=useRef(0);
@@ -307,6 +391,9 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const [testimony,setTestimony]=useState<{name:string;text:string}[]>([]);
   const [busy,setBusy]=useState(false);
   const [muted,setMuted]=useState(true);
+  const [settings,setSettings]=useState<GameSettings>(DEFAULT_SETTINGS);
+  const [settingsTab,setSettingsTab]=useState<SettingsTab>("graphics");
+  const [roundNotes,setRoundNotes]=useState<string[]>([]);
   const [evidence,setEvidence]=useState<string[]>(["No evidence yet. Watch who follows victims and who is near sabotaged systems."]);
 
   const aliveAgents=agents.filter(a=>a.alive);
@@ -324,6 +411,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
 
   useEffect(()=>{
     sound.current=createFriendSoundKit({muted:true});
+    hatchAudio.current=createHatchAudio();
     void Promise.all([client.read(),createFriendReader().read(friendId)]).then(([s,sp])=>{setSnapshot(s);setSprites(sp);}).catch(()=>setMessage("Could not load your Friend."));
     const reader=createFriendReader();
     void Promise.allSettled(NPC_TOKEN_IDS.map(id=>reader.read(id))).then(results=>{
@@ -331,8 +419,13 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       results.forEach((r,i)=>{if(r.status==="fulfilled")loaded[String(NPC_TOKEN_IDS[i])]=r.value;});
       setNpcSprites(loaded);
     });
-    return()=>sound.current?.dispose();
+    return()=>{sound.current?.dispose();hatchAudio.current?.dispose();};
   },[client,friendId]);
+
+  useEffect(()=>{
+    hatchAudio.current?.set(settings,muted);
+    sound.current?.setMuted(muted||settings.master===0||settings.sfx===0);
+  },[settings,muted]);
 
   useEffect(()=>{
     if(phase!=="play"||paused||menu)return;
@@ -355,11 +448,14 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   useEffect(()=>{
     const node=canvas.current,ctx=node?.getContext("2d");if(!node||!ctx||!sprites)return;
     let raf=0,prev=0,frameNo=0;
-    const kd=(e:KeyboardEvent)=>{const k=e.key.toLowerCase();if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"].includes(k))keys.current.add(k);if(k==="e")interact();if(k==="r")reportBody();if(k==="f"&&inventory.flashlight>0)setFlashlightOn(v=>!v);};
+    const kd=(e:KeyboardEvent)=>{const k=e.key.toLowerCase();if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"].includes(k))keys.current.add(k);if(k==="e")interact();if(k==="r")reportBody();if(k==="f"&&inventory.flashlight>0)setFlashlightOn(v=>!v);if(k==="g"&&phase==="play")setMenu("inventory");if(k==="escape")setMenu(v=>v?null:"settings");};
     const ku=(e:KeyboardEvent)=>keys.current.delete(e.key.toLowerCase());
     window.addEventListener("keydown",kd);window.addEventListener("keyup",ku);
 
     const loop=(now:number)=>{
+      const frameInterval=1000/settings.fps;
+      if(now-lastFrameDraw.current<frameInterval*.88){raf=requestAnimationFrame(loop);return;}
+      lastFrameDraw.current=now;
       frameNo++;const dt=prev?Math.min((now-prev)/1000,.05):0;prev=now;
       const p=pos.current,before={...p};
 
@@ -368,7 +464,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
         if(dx||dy)destination.current=null;else if(destination.current){dx=destination.current.x-p.x;dy=destination.current.y-p.y;if(Math.hypot(dx,dy)<7){destination.current=null;dx=0;dy=0;}}
         if(dx||dy){const l=Math.hypot(dx,dy);p.x=clamp(p.x+dx/l*SPEED*dt,120,WORLD.width-120);p.y=clamp(p.y+dy/l*SPEED*dt,120,WORLD.height-120);facing.current=Math.abs(dx)>Math.abs(dy)?(dx<0?"left":"right"):(dy<0?"up":"down");if(facing.current==="left"||facing.current==="right")side.current=facing.current;}
 
-        // Keepers follow real chore routes, pause to work, and build alibis.
+        // Keepers do visible chores, remember nearby Friends, and build believable alibis.
         const current=agentsRef.current;
         const moved=current.map((a,i)=>{
           if(!a.alive)return a;
@@ -380,27 +476,32 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
           let workUntil=a.workUntil;
           let lastZone=a.lastZone;
           let lastAction=a.lastAction;
+          let lastSeenName=a.lastSeenName,lastSeenZone=a.lastSeenZone,lastSeenAt=a.lastSeenAt;
 
-          // The Mimic usually pretends to work, but occasionally takes a sneaky detour.
-          const detour=isMimic && Math.floor(now/4200+i)%5===0;
-          if(detour) target=randPoint(Math.floor(now/1200)+i*41+PROFILE.seed);
+          const nearby=current.filter(x=>x.alive&&x.id!==a.id&&dist(a.p,x.p)<235).sort((x,y)=>dist(a.p,x.p)-dist(a.p,y.p))[0];
+          if(nearby){lastSeenName=nearby.name;lastSeenZone=zone;lastSeenAt=now;}
+
+          // Mimic spends most of the round looking legitimate. Detours are short and context-aware.
+          const detourWindow=Math.floor((now+i*613)/5200)%7;
+          const detour=isMimic&&(detourWindow===3||detourWindow===6)&&workUntil===0;
+          if(detour){
+            const nearestInnocent=current.filter(x=>x.alive&&x.id!=="mimic").sort((x,y)=>dist(a.p,x.p)-dist(a.p,y.p))[0];
+            const lure=nearestInnocent&&dist(a.p,nearestInnocent.p)>260?nearestInnocent.p:randPoint(Math.floor(now/1700)+i*41+PROFILE.seed);
+            target={x:clamp(lure.x+((i%2)?110:-110),160,WORLD.width-160),y:clamp(lure.y+((i%3)-1)*100,160,WORLD.height-160)};
+            lastAction="crossing the Garden between chores";
+          }
 
           const atWork=near(a.p,target,48);
-          if(atWork && !detour){
-            if(workUntil===0) workUntil=now+2200+(i%3)*700;
-            if(now<workUntil){
-              return {...a,target,workUntil,lastZone:zone,lastAction:"working at "+ZONES[zone].name};
-            }
+          if(atWork&&!detour){
+            if(workUntil===0)workUntil=now+2400+(i%3)*850;
+            if(now<workUntil)return {...a,target,workUntil,lastZone:zone,lastAction:"working at "+ZONES[zone].name,lastSeenName,lastSeenZone,lastSeenAt};
             choreIndex=(choreIndex+1)%zoneOrder.length;
-            zone=zoneOrder[choreIndex];
-            target=ZONES[zone].p;
-            workUntil=0;
-            lastZone=zoneOrder[(choreIndex+zoneOrder.length-1)%zoneOrder.length];
-            lastAction="finished "+ZONES[lastZone].name+" chore";
+            const finished=zoneOrder[(choreIndex+zoneOrder.length-1)%zoneOrder.length];
+            zone=zoneOrder[choreIndex];target=ZONES[zone].p;workUntil=0;lastZone=finished;lastAction="finished "+ZONES[finished].name+" chore";
           }
 
           const vx=target.x-a.p.x,vy=target.y-a.p.y,d=Math.max(1,Math.hypot(vx,vy));
-          return {...a,target,choreIndex,workUntil,lastZone,lastAction,p:{x:clamp(a.p.x+vx/d*a.speed*dt,140,WORLD.width-140),y:clamp(a.p.y+vy/d*a.speed*dt,140,WORLD.height-140)}};
+          return {...a,target,choreIndex,workUntil,lastZone,lastAction,lastSeenName,lastSeenZone,lastSeenAt,p:{x:clamp(a.p.x+vx/d*a.speed*dt,140,WORLD.width-140),y:clamp(a.p.y+vy/d*a.speed*dt,140,WORLD.height-140)}};
         });
         agentsRef.current=moved;
         frameSync.current++;
@@ -415,9 +516,14 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
               lastSabotage.current=now;
               const cutLights=Math.random()>.52;
               if(cutLights)setLights(false);else setHatchPanic(true);
-              const zone=cutLights?"Lamp Court":"Central Hatch";
-              setEvidence(prev=>[...prev.slice(-3),"System log: "+zone+" failed. Several Keepers passed nearby; no identity confirmed."]);
+              const sabotageZone:ZoneKey=cutLights?"lamp":"hatch";
+              const zone=ZONES[sabotageZone].name;
+              agentsRef.current=agentsRef.current.map(a=>a.alive&&dist(a.p,ZONES[sabotageZone].p)<265?{...a,suspicion:a.suspicion+1}:a);
+              setEvidence(prev=>[...prev.slice(-3),"System log: "+zone+" failed. Multiple Keepers crossed the sector; no identity confirmed."]);
+              setRoundNotes(prev=>[...prev.slice(-7),(cutLights?"Lights":"Hatch")+" sabotaged near "+zone+"."]);
               setMessage(cutLights?"Power sabotage. The Garden is dim, but still navigable.":"Hatch sabotage detected. Watch who leaves the area.");
+              if(settings.screenShake&&!settings.reducedMotion)shakeUntil.current=now+420;
+              hatchAudio.current?.cue("danger");
             }
             if(now-lastKill.current>12500){
               const victims=currentAgents.filter(a=>a.alive&&a.id!=="mimic"&&dist(a.p,mimic.p)<115);
@@ -428,48 +534,58 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
                   lastKill.current=now;
                   const killZone=ALL_ZONES.reduce((best,z)=>dist(mimic.p,ZONES[z].p)<dist(mimic.p,ZONES[best].p)?z:best,ALL_ZONES[0]);
                   const next=currentAgents.map(a=>{
-                    if(a.id===victim.id)return {...a,alive:false,lastAction:"killed near "+ZONES[killZone].name};
+                    if(a.id===victim.id)return {...a,alive:false,reported:false,lastAction:"killed near "+ZONES[killZone].name};
                     if(a.id==="mimic"){
                       const escape=ALL_ZONES[(a.choreIndex+2)%ALL_ZONES.length];
                       return {...a,target:ZONES[escape].p,choreIndex:(a.choreIndex+2)%ALL_ZONES.length,lastZone:escape,lastAction:"claims to be heading to "+ZONES[escape].name};
                     }
                     return a;
                   });
-                  agentsRef.current=next;setAgents(next);
+                  const suspicious=next.map(a=>a.alive&&a.id!=="mimic"&&dist(a.p,victim.p)<320?{...a,suspicion:a.suspicion+.6}:a);
+                  agentsRef.current=suspicious;setAgents(suspicious);
                   setEvidence(prev=>[...prev.slice(-3),victim.name+" was found near "+ZONES[killZone].name+". No direct witness saw the attack."]);
+                  setRoundNotes(prev=>[...prev.slice(-7),victim.name+" went down near "+ZONES[killZone].name+"."]);
                   setMessage(victim.name+" is down. A Keeper may discover the body and call a meeting.");
-                  sound.current?.play("impact");
+                  if(settings.screenShake&&!settings.reducedMotion)shakeUntil.current=now+520;
+                  sound.current?.play("impact");hatchAudio.current?.cue("danger");
                 }
               }
             }
 
             // AI Keepers can discover and report bodies themselves.
-            const corpse=currentAgents.find(a=>!a.alive);
-            const reporter=currentAgents.find(a=>a.alive&&a.id!=="mimic"&&corpse&&dist(a.p,corpse.p)<95);
+            const corpse=agentsRef.current.find(a=>!a.alive&&!a.reported);
+            const reporter=agentsRef.current.find(a=>a.alive&&a.id!=="mimic"&&corpse&&dist(a.p,corpse.p)<95);
             if(corpse&&reporter&&now-lastAutoReport.current>6000){
               lastAutoReport.current=now;
+              updateAgents(xs=>xs.map(a=>a===corpse?{...a,reported:true}:a));
               openMeeting(reporter.name+" reported "+corpse.name+"'s body.");
             }
           }
         }
       }
 
-      cam.current={x:Math.round(clamp(p.x-VIEW.width/2,0,WORLD.width-VIEW.width)),y:Math.round(clamp(p.y-VIEW.height/2,0,WORLD.height-VIEW.height))};
-      ctx.clearRect(0,0,VIEW.width,VIEW.height);ctx.save();ctx.translate(-cam.current.x,-cam.current.y);
+      const zoom=settings.cameraZoom;
+      const visibleW=VIEW.width/zoom,visibleH=VIEW.height/zoom;
+      cam.current={x:Math.round(clamp(p.x-visibleW/2,0,WORLD.width-visibleW)),y:Math.round(clamp(p.y-visibleH/2,0,WORLD.height-visibleH))};
+      const shaking=settings.screenShake&&!settings.reducedMotion&&now<shakeUntil.current;
+      const shakeX=shaking?Math.sin(now*.11)*5:0,shakeY=shaking?Math.cos(now*.13)*4:0;
+      ctx.clearRect(0,0,VIEW.width,VIEW.height);ctx.save();ctx.scale(zoom,zoom);ctx.translate(-cam.current.x+shakeX/zoom,-cam.current.y+shakeY/zoom);
       const renderAgents=agentsRef.current;
-      drawWorld(ctx,now,lights,hatchPanic,renderAgents.filter(a=>!a.alive));
-      renderAgents.forEach(a=>{const sp=npcSprites[String(a.tokenId)];if(sp)drawNpcFriend(ctx,sp,a,now);else drawKeeper(ctx,a,now);});
+      drawWorld(ctx,settings.reducedMotion?0:now,lights,hatchPanic,renderAgents.filter(a=>!a.alive&&!a.reported));
+      renderAgents.forEach(a=>{const sp=npcSprites[String(a.tokenId)];if(sp)drawNpcFriend(ctx,sp,a,now);else drawKeeper(ctx,a,now);drawChoreEffect(ctx,a,now);});
       ctx.restore();
 
       // Screen-space mist and drifting particles.
       ctx.save();
-      for(let i=0;i<24;i++){
+      const particleCount=settings.graphics==="low"?6:settings.graphics==="medium"?12:settings.graphics==="high"?20:28;
+      for(let i=0;i<particleCount;i++){
         const px=(i*137+(now*.012*(1+i%3)))%VIEW.width;
         const py=(i*89+(now*.006*(1+i%2)))%VIEW.height;
         ctx.fillStyle=i%5===0?"rgba(223,231,221,.08)":"rgba(174,191,176,.045)";
         ctx.fillRect(px,py,1+(i%2),1+(i%3));
       }
-      const fog1=ctx.createRadialGradient(160,540,20,160,540,280);fog1.addColorStop(0,"rgba(185,198,187,.055)");fog1.addColorStop(1,"rgba(185,198,187,0)");ctx.fillStyle=fog1;ctx.fillRect(0,300,420,340);
+      const fogAlpha=(settings.fog/100)*.08;
+      const fog1=ctx.createRadialGradient(160,540,20,160,540,280);fog1.addColorStop(0,"rgba(185,198,187,"+fogAlpha+")");fog1.addColorStop(1,"rgba(185,198,187,0)");ctx.fillStyle=fog1;ctx.fillRect(0,300,420,340);
       ctx.restore();
 
       // Ambient night lighting: the world remains readable instead of following the player with a dark bubble.
@@ -477,7 +593,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       ctx.fillStyle=lights?"rgba(2,8,5,.18)":"rgba(1,4,3,.38)";ctx.fillRect(0,0,VIEW.width,VIEW.height);
       const moon=ctx.createLinearGradient(0,0,VIEW.width,VIEW.height);moon.addColorStop(0,"rgba(174,196,187,.10)");moon.addColorStop(.55,"rgba(76,102,92,.02)");moon.addColorStop(1,"rgba(0,0,0,.10)");ctx.fillStyle=moon;ctx.fillRect(0,0,VIEW.width,VIEW.height);
 
-      const sx=p.x-cam.current.x,sy=p.y-cam.current.y;
+      const sx=(p.x-cam.current.x)*zoom,sy=(p.y-cam.current.y)*zoom;
       if(inventory.flashlight>0&&flashlightOn){
         const dir=facing.current==="right"?0:facing.current==="left"?Math.PI:facing.current==="down"?Math.PI/2:-Math.PI/2;
         const length=390,spread=.48;
@@ -488,21 +604,22 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
         ctx.globalCompositeOperation="source-over";
       }
       ctx.restore();
-      ctx.save();ctx.translate(-cam.current.x,-cam.current.y);drawFriend(ctx,sprites,p,facing.current,dist(before,p)>.1,Math.floor(now/110)%8,side.current);ctx.restore();
+      ctx.save();ctx.scale(zoom,zoom);ctx.translate(-cam.current.x+shakeX/zoom,-cam.current.y+shakeY/zoom);drawFriend(ctx,sprites,p,facing.current,dist(before,p)>.1,Math.floor(now/110)%8,side.current);ctx.restore();
 
       raf=requestAnimationFrame(loop);
     };
     raf=requestAnimationFrame(loop);
     return()=>{cancelAnimationFrame(raf);window.removeEventListener("keydown",kd);window.removeEventListener("keyup",ku)};
-  },[sprites,npcSprites,phase,paused,menu,role,lights,hatchPanic,inventory.flashlight,flashlightOn]);
+  },[sprites,npcSprites,phase,paused,menu,role,lights,hatchPanic,inventory.flashlight,flashlightOn,settings]);
 
   function start(){
+    void hatchAudio.current?.resume();
     const chosen:Role="friend";
     setRole(chosen);setPhase("role");setTimer(240);setLights(true);setHatchPanic(false);setTasks({lamp:false,pond:false,hatch:false,shrine:false});setEmergencyLeft(1);setKillCooldown(12);setShiftCooldown(10);setDisguise(null);setVotes({});
     pos.current={...START};
-    const bots=BOT_NAMES.map((name,i):Agent=>({id:"bot"+i,name,p:randPoint(i*31+7),alive:true,color:["#526858","#6b5f52","#4b606a","#6a4f55","#596149"][i],target:ZONES[ALL_ZONES[i%4]].p,speed:74+i*3,task:ALL_ZONES[i%4],cooldown:0,suspicion:0,tokenId:NPC_TOKEN_IDS[i],choreIndex:i%4,workUntil:0,lastZone:ALL_ZONES[i%4],lastAction:"heading to "+ZONES[ALL_ZONES[i%4]].name}));
+    const bots=BOT_NAMES.map((name,i):Agent=>({id:"bot"+i,name,p:randPoint(i*31+7),alive:true,color:["#526858","#6b5f52","#4b606a","#6a4f55","#596149"][i],target:ZONES[ALL_ZONES[i%4]].p,speed:74+i*3,task:ALL_ZONES[i%4],cooldown:0,suspicion:0,tokenId:NPC_TOKEN_IDS[i],choreIndex:i%4,workUntil:0,lastZone:ALL_ZONES[i%4],lastAction:"heading to "+ZONES[ALL_ZONES[i%4]].name,personality:PERSONALITIES[i],reported:false,lastSeenName:null,lastSeenZone:ALL_ZONES[i%4],lastSeenAt:0}));
     if(chosen==="friend"){const culprit=PROFILE.seed%BOT_NAMES.length;bots[culprit]={...bots[culprit],id:"mimic",name:bots[culprit].name};}
-    agentsRef.current=bots;setAgents(bots);setEvidence(["One of these five Friend Keepers is the saboteur. Watch their routes, chores, and contradictions."]);setTestimony([]);setRfEarned(0);
+    agentsRef.current=bots;setAgents(bots);setEvidence(["One of these five Friend Keepers is the saboteur. Watch routes, chores and contradictions — nobody gets a perfect clue."]);setTestimony([]);setRoundNotes(["Night began. Five Keepers entered the Garden."]);setRfEarned(0);
     setMessage("You are a FRIEND. Complete containment tasks, but your real goal is to identify and eject the hidden saboteur.");
     setTimeout(()=>setPhase("play"),2200);
   }
@@ -512,7 +629,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     if(role==="friend"){
       const zone=ALL_ZONES.find(z=>near(pos.current,ZONES[z].p,125));
       if(zone&&!tasks[zone]){
-        setTasks(v=>({...v,[zone]:true}));setMessage(ZONES[zone].name+" secured. "+(tasksDone+1)+"/4 tasks complete.");sound.current?.play("reward");
+        setTasks(v=>({...v,[zone]:true}));setMessage(ZONES[zone].name+" secured. "+(tasksDone+1)+"/4 tasks complete.");setRoundNotes(prev=>[...prev.slice(-7),"You completed "+ZONES[zone].name+"."]);sound.current?.play("reward");hatchAudio.current?.cue("task");
         if(tasksDone+1>=4)setMessage("Containment tasks complete. Now identify and eject the saboteur before sunrise.");
         return;
       }
@@ -527,8 +644,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
 
   function reportBody(){
     if(phase!=="play")return;
-    const body=bodies.find(b=>near(pos.current,b.p,115));
-    if(body){openMeeting(body.name+" was found in the Garden.");return;}
+    const body=agentsRef.current.find(b=>!b.alive&&!b.reported&&near(pos.current,b.p,115));
+    if(body){updateAgents(xs=>xs.map(a=>a===body?{...a,reported:true}:a));openMeeting(body.name+" was found in the Garden.");return;}
     setMessage("No body nearby.");
   }
 
@@ -540,44 +657,74 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   function openMeeting(reason:string){
     const alive=agentsRef.current.filter(a=>a.alive);
     const mimic=alive.find(a=>a.id==="mimic");
-    const lines=alive.map(a=>{
+    const cadence=["I stayed on my route.","I doubled back once.","I kept my head down.","I watched the crossroads.","I finished what I was assigned."];
+    const lines=alive.map((a,i)=>{
+      const recent=a.lastSeenName&&performance.now()-a.lastSeenAt<18000;
+      const truthfulPlace=a.lastAction.includes("working")?a.lastAction:"I "+a.lastAction;
       if(a.id==="mimic"){
-        const lieZone=ALL_ZONES[(a.choreIndex+1)%ALL_ZONES.length];
+        const lieZone=ALL_ZONES[(a.choreIndex+1+(i%2))%ALL_ZONES.length];
         const suspects=alive.filter(x=>x.id!==a.id);
-        const blame=suspects[(a.choreIndex+PROFILE.seed)%Math.max(1,suspects.length)];
-        return {name:a.name,text:"I was doing "+ZONES[lieZone].name+". I saw "+(blame?.name||"someone")+" leave the opposite path. Check them."};
+        const blame=suspects.sort((x,y)=>y.suspicion-x.suspicion)[0]||suspects[0];
+        const lieByPersonality:Record<Personality,string>={
+          careful:"I checked "+ZONES[lieZone].name+" twice. "+(blame?blame.name+" crossed behind me.":"I saw nobody."),
+          nervous:"I was at "+ZONES[lieZone].name+"—I think. "+(blame?"Ask "+blame.name+", they were close.":"I panicked when the lights changed."),
+          direct:"I did "+ZONES[lieZone].name+". "+(blame?blame.name+" is the one I'd question.":"That's all."),
+          quiet:""+ZONES[lieZone].name+". "+(blame?"Saw "+blame.name+".":"Alone."),
+          watchful:"I was watching the path from "+ZONES[lieZone].name+". "+(blame?blame.name+" changed direction after the alarm.":"No one passed me.")
+        };
+        return {name:a.name,text:lieByPersonality[a.personality]};
       }
-      const saw=alive.find(x=>x.id!==a.id&&dist(a.p,x.p)<260);
-      return {name:a.name,text:"I "+a.lastAction+". "+(saw?"I remember seeing "+saw.name+" nearby.":"I was mostly alone.")};
+      const memory=recent?" I remember "+a.lastSeenName+" near "+ZONES[a.lastSeenZone].name+".":" I don't have a clean visual on anyone.";
+      const style:Record<Personality,string>={
+        careful:"I kept notes: "+truthfulPlace+".",
+        nervous:"I was trying to stay calm. "+truthfulPlace+".",
+        direct:truthfulPlace+".",
+        quiet:truthfulPlace+".",
+        watchful:"I watched the route while I worked. "+truthfulPlace+"."
+      };
+      return {name:a.name,text:style[a.personality]+memory+" "+cadence[i%cadence.length]};
     });
-    // Occasionally include a system clue, but never a direct reveal.
-    if(mimic&&inventory.uv>0){
-      lines.push({name:"UV Scanner",text:"System trace: one testimony does not match its last task-zone ping. It does not identify which one."});
-    }
-    setTestimony(lines);setMeetingReason(reason);setPhase("meeting");setVotes({});setMessage("Compare chores, routes, and contradictions before voting.");sound.current?.play("select");
+    if(mimic&&inventory.uv>0)lines.push({name:"UV Scanner",text:"Trace mismatch detected: one Keeper's claimed route conflicts with a recent task-zone ping. Identity intentionally unresolved."});
+    setTestimony(lines);setMeetingReason(reason);setPhase("meeting");setVotes({});setMessage("Compare chores, timing, memories and contradictions. The Mimic can lie convincingly.");setRoundNotes(prev=>[...prev.slice(-7),reason]);sound.current?.play("select");hatchAudio.current?.cue("meeting");
   }
 
   function vote(id:string){
     const candidates=agentsRef.current.filter(a=>a.alive);
     const tally:Record<string,number>={[id]:1};
     for(const voter of candidates){
-      if(Math.random()<.18)continue;
+      if(Math.random()<.16)continue;
       const pool=candidates.filter(c=>c.id!==voter.id);
-      const culprit=agentsRef.current.find(a=>a.id==="mimic");
-      const pick=(voter.id!=="mimic"&&Math.random()<.45&&culprit)?culprit:pool[Math.floor(Math.random()*pool.length)];
+      if(!pool.length)continue;
+      const ranked=[...pool].sort((a,b)=>{
+        const memoryA=(voter.lastSeenName===a.name?1.1:0)+a.suspicion;
+        const memoryB=(voter.lastSeenName===b.name?1.1:0)+b.suspicion;
+        const noiseA=((Number(a.tokenId%17n)+voter.choreIndex)%7)*.08;
+        const noiseB=((Number(b.tokenId%17n)+voter.choreIndex)%7)*.08;
+        return (memoryB+noiseB)-(memoryA+noiseA);
+      });
+      let pick=ranked[0];
+      if(voter.id==="mimic"){
+        const innocents=ranked.filter(a=>a.id!=="mimic");
+        pick=innocents[0]||pick;
+      }else if(Math.random()<.28){
+        pick=ranked[Math.min(ranked.length-1,1)];
+      }
       if(pick)tally[pick.id]=(tally[pick.id]||0)+1;
     }
-    setVotes(tally);
-    const top=Object.entries(tally).sort((a,b)=>b[1]-a[1])[0];
-    const ejected=top?agentsRef.current.find(a=>a.id===top[0]):null;
+    setVotes(tally);hatchAudio.current?.cue("vote");
+    const ordered=Object.entries(tally).sort((a,b)=>b[1]-a[1]);
+    const top=ordered[0],second=ordered[1];
+    const tied=top&&second&&top[1]===second[1];
+    const ejected=!tied&&top?agentsRef.current.find(a=>a.id===top[0]):null;
     setTimeout(()=>{
-      if(!ejected){setPhase("play");return;}
-      updateAgents(xs=>xs.map(a=>a.id===ejected.id?{...a,alive:false}:a));
+      if(!ejected){setMessage("Vote tied. Nobody was expelled.");setRoundNotes(prev=>[...prev.slice(-7),"Meeting ended in a tie."]);setPhase("play");return;}
+      updateAgents(xs=>xs.map(a=>a.id===ejected.id?{...a,alive:false,reported:true,lastAction:"expelled by vote"}:a));
       if(role==="friend"&&ejected.id==="mimic"){finish("won",ejected.name+" was the Mimic. The remaining Keepers seal the Hatch.");return;}
       if(role==="mimic"&&ejected.id==="mimic"){finish("lost","The Keepers identified you before the Hatch opened.");return;}
-      setMessage(ejected.name+" was expelled. The night continues.");
+      setRoundNotes(prev=>[...prev.slice(-7),ejected.name+" was expelled — wrong call."]);
+      setMessage(ejected.name+" was not the Mimic. The Garden just got quieter.");
       setPhase("play");checkMimicWin();
-    },900);
+    },950);
   }
 
   function sabotage(kind:"lights"|"hatch"){
@@ -603,7 +750,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
 
   function finish(result:"won"|"lost",text:string){
     if(result==="won"){setRfEarned(.4);text+=" Prototype economy reward: +0.40 RF (simulated).";}
-    setPhase(result);setMessage(text);sound.current?.play(result==="won"?"reward":"impact");
+    setRoundNotes(prev=>[...prev.slice(-7),result==="won"?"The Mimic was exposed.":"Containment failed before sunrise."]);
+    setPhase(result);setMessage(text);sound.current?.play(result==="won"?"reward":"impact");hatchAudio.current?.cue(result==="won"?"win":"lose");
   }
 
   async function buyItem(kind:"flashlight"|"uv"|"flare"|"ward",units:number){
@@ -635,14 +783,17 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const minute=Math.floor((240-timer)/40);const clock=["12:00","1:00","2:00","3:00","4:00","5:00","6:00"][Math.min(6,minute)];
   const roleLabel=role==="friend"?"FRIEND":"MIMIC";
 
-  return <section className={"deduction-game "+(!lights?"blackout ":"")+(hatchPanic?"breach ":"")}>
+  const sectionStyle={"--game-brightness":String(settings.brightness),"--grain-opacity":String(settings.grain/100)} as CSSProperties;
+  return <section style={sectionStyle} data-quality={settings.graphics} className={"deduction-game "+(!lights?"blackout ":"")+(hatchPanic?"breach ":"")+(settings.reducedMotion?" reduced-motion":"")}>
     <canvas ref={canvas} width={VIEW.width} height={VIEW.height} className="game-canvas" onPointerDown={e=>{
-      if(phase!=="play"||paused||menu)return;const r=e.currentTarget.getBoundingClientRect();destination.current={x:cam.current.x+(e.clientX-r.left)*VIEW.width/r.width,y:cam.current.y+(e.clientY-r.top)*VIEW.height/r.height};
+      if(phase!=="play"||paused||menu)return;const r=e.currentTarget.getBoundingClientRect();destination.current={x:cam.current.x+((e.clientX-r.left)*VIEW.width/r.width)/settings.cameraZoom,y:cam.current.y+((e.clientY-r.top)*VIEW.height/r.height)/settings.cameraZoom};
     }}/>
 
     {phase==="play"&&<>
       <div className="hud mission"><span>{roleLabel} // {clock}</span><b>{role==="friend"?"KEEP THE HATCH SEALED":"BECOME ONE OF THEM"}</b><small>{role==="friend"?tasksDone+"/4 tasks · identify the saboteur":aliveAgents.length+" Keepers remain"}</small></div>
       <div className="hud statusbox"><b>{lights?"LIGHTS ONLINE":"BLACKOUT"}</b><span>{hatchPanic?"HATCH SABOTAGED":"Containment stable"}</span></div>
+      <button className="settings-fab" onClick={()=>setMenu("settings")} aria-label="Settings">⚙</button>
+      {settings.hints&&role==="friend"&&<div className="hint-chip">{tasksDone<4?"NEXT · "+ZONES[ALL_ZONES.find(z=>!tasks[z])||"hatch"].name:"Watch routes · compare testimony · eject the Mimic"}</div>}
       {role==="friend"&&<div className="task-list">{ALL_ZONES.map(z=><span key={z} className={tasks[z]?"done":""}>{tasks[z]?"✓":"□"} {ZONES[z].name}</span>)}</div>}
       <div className="bottom-actions">
         <button onClick={interact}>{role==="mimic"?"KILL / USE":"USE"} <small>E</small></button>
@@ -654,13 +805,13 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       <div className="message">{message}</div>
     </>}
 
-    {phase==="title"&&<div className="overlay"><div className="title-card"><span>RARE FRIENDS SOCIAL HORROR</span><h1>THE HATCH</h1><p>One of the Keepers is a hidden saboteur. It will kill the team unless you identify it in a meeting.</p><div className="pitch"><b>MASK</b><span>The Mimic can copy identities.</span><b>GARDEN</b><span>A realistic night map built around your NFT.</span><b>HATCH</b><span>Keep it sealed until sunrise.</span></div><button onClick={start}>START DEDUCTION NIGHT</button><button onClick={()=>setMenu("settings")}>SETTINGS</button><small>WASD / arrows · E use · R report · click/tap to move</small></div></div>}
+    {phase==="title"&&<div className="overlay"><div className="title-card"><span>RARE FRIENDS SOCIAL HORROR · FRIEND #{friendId.toString()}</span><h1>THE HATCH</h1><p>One of the Keepers is a hidden saboteur. It will kill the team unless you identify it in a meeting.</p><div className="pitch"><b>MASK</b><span>The Mimic can copy identities.</span><b>GARDEN</b><span>A realistic night map built around your NFT.</span><b>HATCH</b><span>Keep it sealed until sunrise.</span></div><button onClick={start}>START DEDUCTION NIGHT</button><button onClick={()=>setMenu("settings")}>SETTINGS</button><small>WASD / arrows · E use · R report · click/tap to move</small></div></div>}
 
     {phase==="role"&&<div className={"overlay role-card "+role}><div><span>YOUR ROLE</span><h1>{role==="friend"?"FRIEND":"THE MIMIC"}</h1><p>{message}</p></div></div>}
 
     {phase==="meeting"&&<div className="overlay meeting"><div className="meeting-card"><span>GARDEN MEETING</span><h2>{meetingReason}</h2><p>Who doesn't belong here?</p><div className="testimony"><b>KEEPER REPORTS</b>{testimony.map((t,i)=><div key={i}><strong>{t.name}</strong><span>{t.text}</span></div>)}</div><div className="evidence"><b>SYSTEM EVIDENCE</b>{evidence.map((e,i)=><span key={i}>• {e}</span>)}</div><div className="vote-grid">{agents.filter(a=>a.alive).map(a=><button key={a.id} onClick={()=>vote(a.id)}><b>{a.name}</b><small>{votes[a.id]?votes[a.id]+" votes":"VOTE"}</small></button>)}</div><button className="skip" onClick={()=>setPhase("play")}>SKIP VOTE</button></div></div>}
 
-    {(phase==="won"||phase==="lost")&&<div className="overlay"><div className={"end-card "+phase}><span>{phase==="won"?"NIGHT SURVIVED":"CONTAINMENT FAILED"}</span><h1>{phase==="won"?"SUNRISE":"REPLACED"}</h1><p>{message}</p><div className="ledger"><span>Role {roleLabel}</span><span>Tasks {tasksDone}/4</span><span>RF spent {rfSpent.toFixed(2)}</span><span>RF earned {rfEarned.toFixed(2)}*</span><span>Friend #334137</span><span>*MVP reward simulated</span></div><button onClick={start}>PLAY AGAIN</button></div></div>}
+    {(phase==="won"||phase==="lost")&&<div className="overlay"><div className={"end-card "+phase}><span>{phase==="won"?"NIGHT SURVIVED":"CONTAINMENT FAILED"}</span><h1>{phase==="won"?"SUNRISE":"REPLACED"}</h1><p>{message}</p><div className="ledger"><span>Role {roleLabel}</span><span>Tasks {tasksDone}/4</span><span>RF spent {rfSpent.toFixed(2)}</span><span>RF earned {rfEarned.toFixed(2)}*</span><span>Mimic {agents.find(a=>a.id==="mimic")?.name||"Unknown"}</span><span>*MVP reward simulated</span></div><div className="round-recap"><b>NIGHT LOG</b>{roundNotes.slice(-5).map((n,i)=><span key={i}>• {n}</span>)}</div><button onClick={start}>PLAY AGAIN</button></div></div>}
 
     {menu==="inventory"&&<GameMenu title="RF NIGHT MARKET" onClose={()=>setMenu(null)}><div className="item-menu">
       <p className="economy-note">MVP economy: purchases exercise FriendSDK token activity. Burn/sink intent and win rewards are simulated for the Vibeathon prototype.</p>
@@ -670,6 +821,35 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       <button disabled={busy} onClick={()=>void buyItem("ward",1)}><b>Ward · 0.10 RF</b><small>Consumes one Ward to cancel active Hatch sabotage immediately.</small></button>
       <div className="inventory-line"><span>Flashlight × {inventory.flashlight}</span><span>UV × {inventory.uv}</span><span>Flare × {inventory.flare}</span><span>Ward × {inventory.ward}</span></div>
     </div></GameMenu>}
-    {menu==="settings"&&<GameMenu title="SETTINGS" onClose={()=>setMenu(null)}><button onClick={()=>{const n=!muted;setMuted(n);sound.current?.setMuted(n);}}>{muted?"SOUND: OFF":"SOUND: ON"}</button><p>This build is a playable social-deduction practice lobby with AI Keepers. Real online lobbies need a multiplayer backend.</p></GameMenu>}
+    {menu==="settings"&&<div className="settings-backdrop" role="dialog" aria-modal="true" aria-label="Settings">
+      <aside className="settings-panel">
+        <div className="settings-head"><div><span>GARDEN CONTROL</span><h2>SETTINGS</h2></div><button onClick={()=>setMenu(null)} aria-label="Close settings">×</button></div>
+        <nav className="settings-tabs">{(["graphics","audio","gameplay"] as SettingsTab[]).map(tab=><button key={tab} className={settingsTab===tab?"active":""} onClick={()=>setSettingsTab(tab)}>{tab}</button>)}</nav>
+
+        {settingsTab==="graphics"&&<div className="settings-page">
+          <label><span>Graphics preset <b>{settings.graphics.toUpperCase()}</b></span><select value={settings.graphics} onChange={e=>setSettings(v=>({...v,graphics:e.target.value as GameSettings["graphics"]}))}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="ultra">Ultra</option></select></label>
+          <label><span>FPS cap <b>{settings.fps}</b></span><select value={settings.fps} onChange={e=>setSettings(v=>({...v,fps:Number(e.target.value) as GameSettings["fps"]}))}><option value="30">30 FPS</option><option value="60">60 FPS</option><option value="120">120 FPS</option></select></label>
+          <label><span>Camera zoom <b>{settings.cameraZoom.toFixed(2)}×</b></span><input type="range" min="0.85" max="1.25" step="0.05" value={settings.cameraZoom} onChange={e=>setSettings(v=>({...v,cameraZoom:Number(e.target.value)}))}/></label>
+          <label><span>Brightness <b>{Math.round(settings.brightness*100)}%</b></span><input type="range" min="0.78" max="1.25" step="0.01" value={settings.brightness} onChange={e=>setSettings(v=>({...v,brightness:Number(e.target.value)}))}/></label>
+          <label><span>Fog density <b>{settings.fog}%</b></span><input type="range" min="0" max="100" value={settings.fog} onChange={e=>setSettings(v=>({...v,fog:Number(e.target.value)}))}/></label>
+          <label><span>Film grain <b>{settings.grain}%</b></span><input type="range" min="0" max="55" value={settings.grain} onChange={e=>setSettings(v=>({...v,grain:Number(e.target.value)}))}/></label>
+          <div className="toggle-row"><span>Screen shake<small>Sabotage and report impact</small></span><button className={settings.screenShake?"on":""} onClick={()=>setSettings(v=>({...v,screenShake:!v.screenShake}))}>{settings.screenShake?"ON":"OFF"}</button></div>
+          <div className="toggle-row"><span>Reduced motion<small>Stops sway, shake and UI drift</small></span><button className={settings.reducedMotion?"on":""} onClick={()=>setSettings(v=>({...v,reducedMotion:!v.reducedMotion}))}>{settings.reducedMotion?"ON":"OFF"}</button></div>
+        </div>}
+
+        {settingsTab==="audio"&&<div className="settings-page">
+          <div className="toggle-row"><span>Mute all<small>FriendSDK + procedural ambience</small></span><button className={muted?"on":""} onClick={()=>{setMuted(v=>!v);void hatchAudio.current?.resume();}}>{muted?"MUTED":"LIVE"}</button></div>
+          {([["master","Master"],["music","Music"],["ambience","Ambience"],["sfx","SFX"]] as const).map(([key,label])=><label key={key}><span>{label} <b>{settings[key]}%</b></span><input type="range" min="0" max="100" value={settings[key]} onChange={e=>{void hatchAudio.current?.resume();setSettings(v=>({...v,[key]:Number(e.target.value)}));}}/></label>)}
+          <p className="settings-note">Audio starts after a user gesture. The low Garden drone is synthesized in-browser; no external music file is required.</p>
+        </div>}
+
+        {settingsTab==="gameplay"&&<div className="settings-page">
+          <div className="toggle-row"><span>Objective hints<small>Shows the next chore until containment is complete</small></span><button className={settings.hints?"on":""} onClick={()=>setSettings(v=>({...v,hints:!v.hints}))}>{settings.hints?"ON":"OFF"}</button></div>
+          <div className="control-grid"><span>Move</span><b>WASD / Arrows / Tap</b><span>Interact</span><b>E</b><span>Report</span><b>R</b><span>Flashlight</span><b>F</b><span>Night Market</span><b>G</b><span>Settings</span><b>Esc</b></div>
+          <button className="reset-settings" onClick={()=>setSettings(DEFAULT_SETTINGS)}>RESET TO COMPETITIVE DEFAULTS</button>
+          <p className="settings-note">The base deduction game stays playable without buying RF gear. Shop costs and victory rewards are simulated MVP economy concepts.</p>
+        </div>}
+      </aside>
+    </div>}
   </section>;
 }
