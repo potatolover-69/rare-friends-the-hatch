@@ -1007,13 +1007,65 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   function start(){
     void hatchAudio.current?.resume();
     const chosen:Role="friend";
-    setRole(chosen);setPhase("role");setTimer(360);setLights(true);setLightsFlickering(false);setHatchPanic(false);setTasks({lamp:false,pond:false,hatch:false,shrine:false,shed:false,ward:false});setUnstableTasks({lamp:false,pond:false,hatch:false,shrine:false,shed:false,ward:false});setLastSabotagedZone(null);setEmergencyLeft(1);setKillCooldown(12);setShiftCooldown(10);setDisguise(null);setVotes({});
+    const emptyTasks:Record<ZoneKey,boolean>={lamp:false,pond:false,hatch:false,shrine:false,shed:false,ward:false};
+    const seed=Math.floor(Math.random()*0x7fffffff);
+    roundSeedRef.current=seed;puzzleTargetsRef.current=makePuzzleTargets(seed);
+    roundEndedRef.current=false;roundDeadlineRef.current=Date.now()+ROUND_SECONDS*1000;
+    nextSabotageAtRef.current=Date.now()+24000+Math.floor(Math.random()*15000);
+    sabotageHistoryRef.current=[];sabotageRef.current=null;mimicCaughtRef.current=false;
+    setRole(chosen);setPhase("role");setTimer(ROUND_SECONDS);setLights(true);setLightsFlickering(false);setHatchPanic(false);
+    tasksRef.current=emptyTasks;setTasks(emptyTasks);setUnstableTasks(emptyTasks);setLastSabotagedZone(null);setActiveSabotage(null);setSabotageSeconds(0);setMimicCaught(false);setMilestone(null);
+    setEmergencyLeft(1);setKillCooldown(12);setShiftCooldown(10);setDisguise(null);setVotes({});
     pos.current={...START};
-    const bots=BOT_NAMES.map((name,i):Agent=>({id:"bot"+i,name,p:randPoint(i*31+7),alive:true,color:["#526858","#6b5f52","#4b606a","#6a4f55","#596149"][i],target:ZONES[ALL_ZONES[i%4]].p,speed:74+i*3,task:ALL_ZONES[i%4],cooldown:0,suspicion:0,tokenId:NPC_TOKEN_IDS[i],choreIndex:i%4,workUntil:0,lastZone:ALL_ZONES[i%4],lastAction:"heading to "+ZONES[ALL_ZONES[i%4]].name,personality:PERSONALITIES[i],reported:false,lastSeenName:null,lastSeenZone:ALL_ZONES[i%4],lastSeenAt:0}));
-    if(chosen==="friend"){const culprit=PROFILE.seed%BOT_NAMES.length;bots[culprit]={...bots[culprit],id:"mimic",name:bots[culprit].name};}
-    agentsRef.current=bots;setAgents(bots);setEvidence(["One of these five Friend Keepers is the Mimic. Watch routes, chores and contradictions — nobody gets a perfect clue."]);setTestimony([]);setRoundNotes(["Night began. Five Keepers entered the Garden."]);setRfEarned(0);setRewardDisplay(0);setFlashlightOn(false);
-    setMessage("You are a FRIEND. Complete containment tasks, but your real goal is to identify and eject the hidden Mimic.");
-    setTimeout(()=>{setPhase("play");if(!tutorialSeen){setTutorialStep(0);setMenu("tutorial");}},2200);
+    const bots=BOT_NAMES.map((name,i):Agent=>({id:"bot"+i,name,p:randPoint(seed+i*31+7),alive:true,color:["#526858","#6b5f52","#4b606a","#6a4f55","#596149"][i],target:ZONES[ALL_ZONES[i%ALL_ZONES.length]].p,speed:74+i*3,task:ALL_ZONES[i%ALL_ZONES.length],cooldown:0,suspicion:0,tokenId:NPC_TOKEN_IDS[i],choreIndex:i%ALL_ZONES.length,workUntil:0,lastZone:ALL_ZONES[i%ALL_ZONES.length],lastAction:"heading to "+ZONES[ALL_ZONES[i%ALL_ZONES.length]].name,personality:PERSONALITIES[i],reported:false,lastSeenName:null,lastSeenZone:ALL_ZONES[i%ALL_ZONES.length],lastSeenAt:0}));
+    if(chosen==="friend"){const culprit=Math.floor(Math.random()*BOT_NAMES.length);bots[culprit]={...bots[culprit],id:"mimic"};}
+    agentsRef.current=bots;setAgents(bots);
+    setEvidence(["One of these five Friend Keepers is the Mimic. Evidence is intentionally incomplete — compare routes, timing and contradictions."]);
+    setTestimony([]);setRoundNotes(["Night began. Five Keepers entered the Garden."]);setRfEarned(0);setRewardDisplay(0);setFlashlightOn(false);
+    setMessage("You are a FRIEND. Secure all six stations and identify the Mimic before sunrise. The clock never pauses.");
+    setTimeout(()=>{if(!roundEndedRef.current){setPhase("play");if(!tutorialSeen){setTutorialStep(0);setMenu("tutorial");}}},2200);
+  }
+
+  function rerollPuzzle(zone:ZoneKey){
+    const fresh=makePuzzleTargets((roundSeedRef.current+Date.now())>>>0),current=puzzleTargetsRef.current;
+    if(zone==="lamp")puzzleTargetsRef.current={...current,lamp:fresh.lamp};
+    else if(zone==="hatch")puzzleTargetsRef.current={...current,hatch:fresh.hatch};
+    else if(zone==="pond")puzzleTargetsRef.current={...current,pond:fresh.pond};
+    else if(zone==="shrine")puzzleTargetsRef.current={...current,shrine:fresh.shrine};
+    else if(zone==="shed")puzzleTargetsRef.current={...current,fuse:fresh.fuse};
+    else puzzleTargetsRef.current={...current,ward:fresh.ward};
+  }
+
+  function clearSabotage(zone:ZoneKey){
+    const active=sabotageRef.current;
+    if(!active||active.zone!==zone)return;
+    sabotageRef.current=null;setActiveSabotage(null);setSabotageSeconds(0);setLastSabotagedZone(null);
+    nextSabotageAtRef.current=Date.now()+22000+Math.floor(Math.random()*18000);
+  }
+
+  function triggerSabotage(zone:ZoneKey){
+    if(sabotageRef.current||roundEndedRef.current||mimicCaughtRef.current)return;
+    const meta=sabotageMeta(zone),now=Date.now();
+    const active:ActiveSabotage={zone,kind:meta.kind,label:meta.label,startedAt:now,deadlineAt:now+meta.seconds*1000,fatalText:meta.fatalText};
+    sabotageRef.current=active;setActiveSabotage(active);setSabotageSeconds(meta.seconds);setLastSabotagedZone(zone);
+    const nextTasks={...tasksRef.current,[zone]:false};tasksRef.current=nextTasks;setTasks(nextTasks);
+    setUnstableTasks(v=>({...v,[zone]:true}));rerollPuzzle(zone);
+    sabotageHistoryRef.current=[...sabotageHistoryRef.current.slice(-1),zone];
+    if(zone==="lamp"){
+      setLightsFlickering(true);setMessage("GRID OVERLOAD — street lights are flickering. Repair Lamp Court before the relay explodes.");
+      window.setTimeout(()=>{if(sabotageRef.current?.zone==="lamp"){setLightsFlickering(false);setLights(false);setMessage("BLACKOUT — visibility is nearly zero. Repair Lamp Court or use a flashlight.");}},1500);
+    }else if(zone==="shed"){
+      setLightsFlickering(true);setMessage("GENERATOR OVERLOAD — isolate the Tool Shed circuit before it blows.");
+      window.setTimeout(()=>{if(sabotageRef.current?.zone==="shed")setLightsFlickering(false);},1100);
+    }else if(zone==="hatch"){
+      setHatchPanic(true);setMessage("HATCH BREACH — reseal Central Hatch before containment fails.");
+    }else{
+      setMessage(meta.label+" — "+ZONES[zone].name+" is unstable. Repair it before the countdown reaches zero.");
+    }
+    setEvidence(prev=>[...prev.slice(-4),"Sabotage log: "+ZONES[zone].name+" failed. More than one Keeper crossed that route, so the log is not a direct identification."]);
+    setRoundNotes(prev=>[...prev.slice(-8),ZONES[zone].name+" sabotaged — "+meta.seconds+" seconds to repair."]);
+    if(settings.screenShake&&!settings.reducedMotion)shakeUntil.current=performance.now()+500;
+    sound.current?.play("impact");hatchAudio.current?.cue("danger");
   }
 
   function interact(){
@@ -1035,47 +1087,51 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   }
 
   function completeTask(zone:ZoneKey){
-    setTasks(v=>({...v,[zone]:true}));setUnstableTasks(v=>({...v,[zone]:false}));if(lastSabotagedZone===zone)setLastSabotagedZone(null);setMenu(null);setActivePuzzle(null);
-    const nextCount=tasksDone+1;
-    setMessage(ZONES[zone].name+" stabilized. "+nextCount+"/"+ALL_ZONES.length+" containment tasks secure.");
-    setRoundNotes(prev=>[...prev.slice(-7),"You completed "+ZONES[zone].name+"."]);
+    const nextTasks={...tasksRef.current,[zone]:true};tasksRef.current=nextTasks;setTasks(nextTasks);
+    setUnstableTasks(v=>({...v,[zone]:false}));clearSabotage(zone);setMenu(null);setActivePuzzle(null);
+    const nextCount=Object.values(nextTasks).filter(Boolean).length,allDone=nextCount===ALL_ZONES.length;
+    setRoundNotes(prev=>[...prev.slice(-8),"You completed "+ZONES[zone].name+"."]);
     sound.current?.play("reward");hatchAudio.current?.cue("task");
     if(zone==="lamp"){setLights(true);setLightsFlickering(false);}
     if(zone==="hatch")setHatchPanic(false);
-    if(nextCount>=ALL_ZONES.length)setMessage("All containment tasks are secure. Now expose the Mimic before sunrise.");
+    setMilestone(allDone?"ALL STATIONS SECURE":"TASK SECURED · "+ZONES[zone].name.toUpperCase());
+    window.setTimeout(()=>setMilestone(null),2200);
+    if(allDone&&mimicCaughtRef.current){finish("won","Containment complete. The Mimic was identified and every station is secure.");return;}
+    if(allDone)setMessage("Containment complete — excellent work. One objective remains: identify the Mimic before sunrise.");
+    else setMessage(ZONES[zone].name+" stabilized. "+nextCount+"/"+ALL_ZONES.length+" stations secure.");
   }
 
   function sequencePress(value:number){
     if(!activePuzzle)return;
-    const target=activePuzzle==="lamp"?[2,4,1,3]:[3,1,4,2];
+    const target=activePuzzle==="lamp"?puzzleTargetsRef.current.lamp:puzzleTargetsRef.current.hatch;
     const nextIndex=puzzleSequence.length;
-    if(value!==target[nextIndex]){setPuzzleSequence([]);setPuzzleError("Wrong connection. The circuit reset.");hatchAudio.current?.cue("danger");return;}
+    if(value!==target[nextIndex]){setPuzzleSequence([]);setPuzzleError("The signal drops. Watch the diagnostic pulse and try the sequence again.");hatchAudio.current?.cue("danger");return;}
     const next=[...puzzleSequence,value];setPuzzleSequence(next);setPuzzleError("");
     if(next.length===target.length)completeTask(activePuzzle);
   }
 
   function checkPond(){
-    if(mirrorAngles.join(",")==="1,3,2")completeTask("pond");
-    else{setPuzzleError("The reflection misses the center seal. Keep rotating the mirrors.");hatchAudio.current?.cue("danger");}
+    const target=puzzleTargetsRef.current.pond;
+    if(mirrorAngles.every((a,i)=>a===target[i]))completeTask("pond");
+    else{setPuzzleError("The reflected beams still miss the seal. Read the faint target marks around the basin.");hatchAudio.current?.cue("danger");}
   }
 
   function symbolPress(symbol:string){
-    const target=["MOON","MASK","SEED","HATCH"];
-    const next=[...shrineSymbols,symbol];
-    if(symbol!==target[shrineSymbols.length]){setShrineSymbols([]);setPuzzleError("The shrine rejects the order. The symbols fade.");return;}
+    const target=puzzleTargetsRef.current.shrine,next=[...shrineSymbols,symbol];
+    if(symbol!==target[shrineSymbols.length]){setShrineSymbols([]);setPuzzleError("The candles gutter. Watch their pulse order before trying again.");hatchAudio.current?.cue("danger");return;}
     setShrineSymbols(next);setPuzzleError("");
     if(next.length===target.length)completeTask("shrine");
   }
 
   function installFuse(){
-    if(fuseChoice===20)completeTask("shed");
-    else{setPuzzleError("That fuse rating trips the relay. Choose the service fuse marked 20A.");hatchAudio.current?.cue("danger");}
+    if(fuseChoice===puzzleTargetsRef.current.fuse)completeTask("shed");
+    else{setPuzzleError("The breaker trips. Re-read the load meter and choose the smallest fuse rated above the measured draw.");hatchAudio.current?.cue("danger");}
   }
 
   function checkWard(){
-    const target=[true,false,true,true];
+    const target=puzzleTargetsRef.current.ward;
     if(wardStones.every((v,i)=>v===target[i]))completeTask("ward");
-    else{setPuzzleError("The boundary hum is wrong. Re-anchor the glowing stones in the ward pattern.");hatchAudio.current?.cue("danger");}
+    else{setPuzzleError("The stones answer with the wrong resonance. Match the weathered plaque's light/dark glyphs.");hatchAudio.current?.cue("danger");}
   }
 
   function reportBody(){
@@ -1185,12 +1241,13 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   }
 
   function finish(result:"won"|"lost",text:string){
-    if(result==="won"){const reward=tasksDone>=ALL_ZONES.length?.20:.15;setRfEarned(reward);text+=" Prototype economy reward: +"+reward.toFixed(2)+" RF (simulated).";}
-    setRoundNotes(prev=>[...prev.slice(-7),result==="won"?"The Mimic was exposed.":"Containment failed before sunrise."]);
+    if(roundEndedRef.current)return;roundEndedRef.current=true;setMenu(null);setFlashlightOn(false);
+    if(result==="won"){const complete=Object.values(tasksRef.current).every(Boolean),reward=complete?.20:.15;setRfEarned(reward);text+=" Prototype economy reward: +"+reward.toFixed(2)+" RF (simulated).";}
+    setRoundNotes(prev=>[...prev.slice(-8),result==="won"?"Both objectives completed before sunrise.":"The night ended in failure."]);
     setPhase(result);setMessage(text);sound.current?.play(result==="won"?"reward":"impact");hatchAudio.current?.cue(result==="won"?"win":"lose");
   }
 
-  async function buyItem(kind:"flashlight"|"battery"|"uv"|"flare"|"ward",units:number){
+  async function buyItem(kind:ShopKind,units:number){
     if(!snapshot||busy)return;setBusy(true);
     try{
       await client.buy(BigInt(units));
