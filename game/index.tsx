@@ -56,6 +56,14 @@ const BOT_NAMES=["Moth","Reed","Vale","Ash","Ivy"];
 const NPC_TOKEN_IDS=[334130n,334131n,334132n,334133n,334134n];
 const PERSONALITIES:Personality[]=["careful","nervous","direct","quiet","watchful"];
 const DEFAULT_SETTINGS:GameSettings={graphics:"high",fps:60,cameraZoom:1,brightness:1,fog:55,grain:22,master:75,music:42,ambience:62,sfx:78,reducedMotion:false,screenShake:true,hints:true};
+const TUTORIAL_STEPS=[
+  {eyebrow:"01 · MOVE + EXPLORE",title:"Learn the Garden",body:"Use WASD, Arrow keys, or tap the ground. The Garden is larger now, trees and rocks block movement, and M opens the full map.",key:"WASD / TAP · M MAP"},
+  {eyebrow:"02 · DO CHORES",title:"Build Your Alibi",body:"Visit the four marked containment sites. When the action button says WORK, press E. Watch which Keepers work nearby and remember their routes.",key:"E · INTERACT"},
+  {eyebrow:"03 · RF NIGHT MARKET",title:"Gear Has a Cost",body:"Press G to open the shop. Flashlights, batteries, UV scans, flares and wards use simulated RF. The flashlight drains while switched on, so conserve it and use a Battery Pack when empty.",key:"G SHOP · F FLASHLIGHT"},
+  {eyebrow:"04 · REPORT BODIES",title:"Death Leaves Evidence",body:"A murdered Keeper freezes where they fell. Their body stays on the ground with a faint spirit beside it. Stand close and press R to call a meeting.",key:"R · REPORT"},
+  {eyebrow:"05 · MEET + VOTE",title:"Everyone Has a Story",body:"Read every Keeper report, compare it with system evidence and what you personally saw, then vote. The Mimic also speaks and can lie. A wrong vote makes the night more dangerous.",key:"READ · COMPARE · VOTE"},
+  {eyebrow:"06 · SURVIVE",title:"Expose the Mimic",body:"Finish chores, survive sabotage and eject the Mimic before sunrise. Winning grants a small simulated RF reward; spending remains optional for the base game.",key:"SURVIVE · EJECT · EARN"},
+] as const;
 
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 const dist=(a:Point,b:Point)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -392,7 +400,7 @@ function drawWorld(ctx:CanvasRenderingContext2D,t:number,lights:boolean,hatchPan
   ctx.strokeStyle="#2f3931";ctx.lineWidth=5;ctx.strokeRect(86,86,WORLD.width-172,WORLD.height-152);
   for(let x=105;x<WORLD.width-95;x+=52){ctx.fillStyle="#151b17";ctx.fillRect(x,80,4,50);ctx.fillRect(x,WORLD.height-118,4,48);}
 
-  TREE_POINTS.slice(0,Math.max(8,Math.floor(TREE_POINTS.length*detail))).forEach((p,i)=>drawTree(ctx,p,t,i+3));
+  TREE_POINTS.forEach((p,i)=>drawTree(ctx,p,t,i+3));
   for(let i=0;i<Math.floor(24*detail);i++){drawBush(ctx,{x:170+((i*229)%(WORLD.width-340)),y:180+((i*401)%(WORLD.height-360))},i+11);}
   for(const r of ROCK_POINTS){ctx.fillStyle="#293029";ctx.beginPath();ctx.ellipse(r.x,r.y,31,20,.2,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#454e45";ctx.stroke();}
   drawLandmarks(ctx);
@@ -458,8 +466,13 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const [votes,setVotes]=useState<Record<string,number>>({});
   const [rfSpent,setRfSpent]=useState(0);
   const [rfEarned,setRfEarned]=useState(0);
-  const [inventory,setInventory]=useState({flashlight:0,uv:0,flare:0,ward:0});
+  const [inventory,setInventory]=useState({flashlight:0,battery:0,uv:0,flare:0,ward:0});
   const [flashlightOn,setFlashlightOn]=useState(false);
+  const [flashlightBattery,setFlashlightBattery]=useState(0);
+  const [toastOpen,setToastOpen]=useState(false);
+  const [tutorialStep,setTutorialStep]=useState(0);
+  const [tutorialSeen,setTutorialSeen]=useState(false);
+  const [rewardDisplay,setRewardDisplay]=useState(0);
   const [testimony,setTestimony]=useState<{name:string;text:string}[]>([]);
   const [busy,setBusy]=useState(false);
   const [muted,setMuted]=useState(false);
@@ -503,6 +516,39 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   },[settings,muted]);
 
   useEffect(()=>{
+    if(phase!=="play"){setToastOpen(false);return;}
+    setToastOpen(true);
+    const t=setTimeout(()=>setToastOpen(false),2800);
+    return()=>clearTimeout(t);
+  },[message,phase]);
+
+  useEffect(()=>{
+    if(phase!=="play"||paused||menu||!flashlightOn)return;
+    const t=setInterval(()=>setFlashlightBattery(v=>{
+      if(v<=.3){
+        setFlashlightOn(false);
+        setMessage("Flashlight battery depleted. Open the Night Market and use a Battery Pack.");
+        return 0;
+      }
+      return Math.max(0,v-.3);
+    }),250);
+    return()=>clearInterval(t);
+  },[phase,paused,menu,flashlightOn]);
+
+  useEffect(()=>{
+    if(phase!=="won"){setRewardDisplay(0);return;}
+    const target=rfEarned;
+    if(target<=0)return;
+    let value=0;
+    const t=setInterval(()=>{
+      value=Math.min(target,value+.01);
+      setRewardDisplay(Number(value.toFixed(2)));
+      if(value>=target)clearInterval(t);
+    },45);
+    return()=>clearInterval(t);
+  },[phase,rfEarned]);
+
+  useEffect(()=>{
     if(phase!=="play"||paused||menu)return;
     const t=setTimeout(()=>setTimer(v=>Math.max(0,v-1)),1000);return()=>clearTimeout(t);
   },[phase,paused,menu,timer]);
@@ -523,7 +569,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   useEffect(()=>{
     const node=canvas.current,ctx=node?.getContext("2d");if(!node||!ctx||!sprites)return;
     let raf=0,prev=0,frameNo=0;
-    const kd=(e:KeyboardEvent)=>{const k=e.key.toLowerCase();if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"].includes(k))keys.current.add(k);if(k==="e")interact();if(k==="r")reportBody();if(k==="f"&&inventory.flashlight>0)setFlashlightOn(v=>!v);if(k==="g"&&phase==="play")setMenu("inventory");if(k==="escape")setMenu(v=>v?null:"settings");};
+    const kd=(e:KeyboardEvent)=>{const k=e.key.toLowerCase();if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"].includes(k))keys.current.add(k);if(k==="e")interact();if(k==="r")reportBody();if(k==="f"&&inventory.flashlight>0&&flashlightBattery>0)setFlashlightOn(v=>!v);if(k==="g"&&phase==="play")setMenu("inventory");if(k==="m"&&phase==="play")setMenu(v=>v==="map"?null:"map");if(k==="escape")setMenu(v=>v?null:"settings");};
     const ku=(e:KeyboardEvent)=>keys.current.delete(e.key.toLowerCase());
     window.addEventListener("keydown",kd);window.addEventListener("keyup",ku);
 
@@ -698,9 +744,9 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     pos.current={...START};
     const bots=BOT_NAMES.map((name,i):Agent=>({id:"bot"+i,name,p:randPoint(i*31+7),alive:true,color:["#526858","#6b5f52","#4b606a","#6a4f55","#596149"][i],target:ZONES[ALL_ZONES[i%4]].p,speed:74+i*3,task:ALL_ZONES[i%4],cooldown:0,suspicion:0,tokenId:NPC_TOKEN_IDS[i],choreIndex:i%4,workUntil:0,lastZone:ALL_ZONES[i%4],lastAction:"heading to "+ZONES[ALL_ZONES[i%4]].name,personality:PERSONALITIES[i],reported:false,lastSeenName:null,lastSeenZone:ALL_ZONES[i%4],lastSeenAt:0}));
     if(chosen==="friend"){const culprit=PROFILE.seed%BOT_NAMES.length;bots[culprit]={...bots[culprit],id:"mimic",name:bots[culprit].name};}
-    agentsRef.current=bots;setAgents(bots);setEvidence(["One of these five Friend Keepers is the saboteur. Watch routes, chores and contradictions — nobody gets a perfect clue."]);setTestimony([]);setRoundNotes(["Night began. Five Keepers entered the Garden."]);setRfEarned(0);
+    agentsRef.current=bots;setAgents(bots);setEvidence(["One of these five Friend Keepers is the saboteur. Watch routes, chores and contradictions — nobody gets a perfect clue."]);setTestimony([]);setRoundNotes(["Night began. Five Keepers entered the Garden."]);setRfEarned(0);setRewardDisplay(0);setFlashlightOn(false);
     setMessage("You are a FRIEND. Complete containment tasks, but your real goal is to identify and eject the hidden saboteur.");
-    setTimeout(()=>setPhase("play"),2200);
+    setTimeout(()=>{setPhase("play");if(!tutorialSeen){setTutorialStep(0);setMenu("tutorial");}},2200);
   }
 
   function interact(){
@@ -828,12 +874,12 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   }
 
   function finish(result:"won"|"lost",text:string){
-    if(result==="won"){setRfEarned(.4);text+=" Prototype economy reward: +0.40 RF (simulated).";}
+    if(result==="won"){const reward=tasksDone>=4?.20:.15;setRfEarned(reward);text+=" Prototype economy reward: +"+reward.toFixed(2)+" RF (simulated).";}
     setRoundNotes(prev=>[...prev.slice(-7),result==="won"?"The Mimic was exposed.":"Containment failed before sunrise."]);
     setPhase(result);setMessage(text);sound.current?.play(result==="won"?"reward":"impact");hatchAudio.current?.cue(result==="won"?"win":"lose");
   }
 
-  async function buyItem(kind:"flashlight"|"uv"|"flare"|"ward",units:number){
+  async function buyItem(kind:"flashlight"|"battery"|"uv"|"flare"|"ward",units:number){
     if(!snapshot||busy)return;setBusy(true);
     try{
       await client.buy(BigInt(units));
@@ -842,9 +888,15 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       setSnapshot(await client.read());
       setInventory(v=>({...v,[kind]:v[kind]+1}));
       setRfSpent(v=>v+units*.1);
-      if(kind==="flashlight")setFlashlightOn(true);
-      setMessage((kind==="flashlight"?"Flashlight":kind==="uv"?"UV Scanner":kind==="flare"?"Emergency Flare":"Ward")+" acquired. RF spend is tracked as the prototype token sink.");
+      if(kind==="flashlight"){setFlashlightBattery(100);setFlashlightOn(true);}
+      setMessage((kind==="flashlight"?"Flashlight":kind==="battery"?"Battery Pack":kind==="uv"?"UV Scanner":kind==="flare"?"Emergency Flare":"Ward")+" acquired. RF spend is tracked as the prototype token sink.");
     }catch(e){setMessage(e instanceof Error?e.message:"RF action failed.");}finally{setBusy(false);}
+  }
+
+  function useBattery(){
+    if(inventory.battery<=0||phase!=="play")return;
+    setInventory(v=>({...v,battery:v.battery-1}));setFlashlightBattery(100);setFlashlightOn(true);setMessage("Battery Pack installed. Flashlight charge restored to 100%.");
+    hatchAudio.current?.cue("task");
   }
 
   function useFlare(){
@@ -871,37 +923,64 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     {phase==="play"&&<>
       <div className="hud mission"><span>{roleLabel} // {clock}</span><b>{role==="friend"?"KEEP THE HATCH SEALED":"BECOME ONE OF THEM"}</b><small>{role==="friend"?tasksDone+"/4 tasks · identify the saboteur":aliveAgents.length+" Keepers remain"}</small></div>
       <div className="hud statusbox"><b>{lights?"LIGHTS ONLINE":"BLACKOUT"}</b><span>{hatchPanic?"HATCH SABOTAGED":"Containment stable"}</span></div>
-      <div className="economy-hud"><b>{snapshot?.mode==="chain"?"FRIEND WALLET":"PREVIEW"} RF {formatRF(snapshot?.rfBalance)}</b><span>Spent {rfSpent.toFixed(2)} · Win +0.40* simulated</span></div>
+      <div className="economy-hud"><b>{snapshot?.mode==="chain"?"FRIEND WALLET":"PREVIEW"} RF {formatRF(snapshot?.rfBalance)}</b><span>Spent {rfSpent.toFixed(2)} · Win +0.15–0.20* simulated</span></div>
       <div className="friend-badge"><b>FRIEND #{friendId.toString()}</b><span>{PROFILE.character} · {PROFILE.scenery} · {PROFILE.floor} · Gen {PROFILE.generation}</span></div>
-      <button className="settings-fab" onClick={()=>setMenu("settings")} aria-label="Settings">⚙</button>
+      <div className="utility-fabs"><button onClick={()=>setMenu("map")} aria-label="Map">MAP</button><button onClick={()=>{setTutorialStep(0);setMenu("tutorial");}} aria-label="How to play">?</button><button onClick={()=>setMenu("settings")} aria-label="Settings">⚙</button></div>
       {settings.hints&&role==="friend"&&<div className="hint-chip">{tasksDone<4?"NEXT · "+ZONES[ALL_ZONES.find(z=>!tasks[z])||"hatch"].name:"Watch routes · compare testimony · eject the Mimic"}</div>}
       {role==="friend"&&<div className="task-list">{ALL_ZONES.map(z=><span key={z} className={tasks[z]?"done":""}>{tasks[z]?"✓":"□"} {ZONES[z].name}</span>)}</div>}
+      <div className="minimap" onClick={()=>setMenu("map")} role="button" aria-label="Open Garden map"><b>GARDEN MAP · M</b><div className="mini-field">
+        {ALL_ZONES.map(z=><i key={z} className={"mini-zone "+(tasks[z]?"done":"")} style={{left:(ZONES[z].p.x/WORLD.width*100)+"%",top:(ZONES[z].p.y/WORLD.height*100)+"%"}} title={ZONES[z].name}/>)}
+        <i className="mini-player" style={{left:(pos.current.x/WORLD.width*100)+"%",top:(pos.current.y/WORLD.height*100)+"%"}}/>
+      </div></div>
+      {inventory.flashlight>0&&<div className={"battery-meter "+(flashlightBattery<20?"low":"")}><span>FLASHLIGHT</span><div><i style={{width:flashlightBattery+"%"}}/></div><b>{Math.round(flashlightBattery)}%</b></div>}
       <div className="bottom-actions">
         <button className={contextAction!=="INTERACT"?"context-ready":""} onClick={interact}>{role==="mimic"?"KILL / USE":contextAction} <small>E</small></button>
         <button onClick={reportBody}>REPORT <small>R</small></button>
         <button disabled={emergencyLeft<=0} onClick={emergency}>MEETING {emergencyLeft}</button>
-        <button onClick={()=>setMenu("inventory")}>SHOP / GEAR</button>{inventory.flashlight>0&&<button onClick={()=>setFlashlightOn(v=>!v)}>FLASHLIGHT {flashlightOn?"ON":"OFF"} <small>F</small></button>}{inventory.flare>0&&<button onClick={useFlare}>USE FLARE ×{inventory.flare}</button>}{inventory.ward>0&&<button onClick={useWard}>USE WARD ×{inventory.ward}</button>}
+        <button onClick={()=>setMenu("inventory")}>SHOP <small>G</small></button><button onClick={()=>setMenu("map")}>MAP <small>M</small></button>{inventory.flashlight>0&&<button disabled={flashlightBattery<=0} onClick={()=>setFlashlightOn(v=>!v)}>LIGHT {flashlightOn?"ON":"OFF"} <small>F</small></button>}{inventory.battery>0&&<button onClick={useBattery}>BATTERY ×{inventory.battery}</button>}{inventory.flare>0&&<button onClick={useFlare}>FLARE ×{inventory.flare}</button>}{inventory.ward>0&&<button onClick={useWard}>WARD ×{inventory.ward}</button>}
       </div>
       {role==="mimic"&&<div className="mimic-actions"><button disabled={shiftCooldown>0} onClick={()=>sabotage("lights")}>CUT LIGHTS {shiftCooldown||""}</button><button disabled={shiftCooldown>0} onClick={()=>sabotage("hatch")}>HATCH SABOTAGE</button><button disabled={shiftCooldown>0||!nearestAlive} onClick={shapeshift}>MASK SHIFT</button><span>KILL CD {killCooldown}s {disguise?"· AS "+disguise:""}</span></div>}
-      <div className="message">{message}</div>
+      {toastOpen&&<div className="message toast-message">{message}</div>}
     </>}
 
-    {phase==="title"&&<div className="overlay"><div className="title-card"><span>RARE FRIENDS SOCIAL HORROR · FRIEND #{friendId.toString()}</span><h1>THE HATCH</h1><p>One of the Keepers is a hidden saboteur. It will kill the team unless you identify it in a meeting.</p><div className="pitch"><b>MASK</b><span>The Mimic can copy identities.</span><b>GARDEN</b><span>A realistic night map built around your NFT.</span><b>HATCH</b><span>Keep it sealed until sunrise.</span></div><button onClick={start}>START DEDUCTION NIGHT</button><button onClick={()=>setMenu("settings")}>SETTINGS</button><small>WASD / arrows · E use · R report · click/tap to move</small></div></div>}
+    {phase==="title"&&<div className="overlay"><div className="title-card"><span>RARE FRIENDS SOCIAL HORROR · FRIEND #{friendId.toString()}</span><h1>THE HATCH</h1><p>One of the Keepers is a hidden saboteur. It will kill the team unless you identify it in a meeting.</p><div className="pitch"><b>MASK</b><span>The Mimic can copy identities.</span><b>GARDEN</b><span>A realistic night map built around your NFT.</span><b>HATCH</b><span>Keep it sealed until sunrise.</span></div><button onClick={start}>START DEDUCTION NIGHT</button><button onClick={()=>{setTutorialStep(0);setMenu("tutorial");}}>HOW TO PLAY</button><button onClick={()=>setMenu("settings")}>SETTINGS</button><small>WASD / arrows · E use · R report · F light · M map · G shop</small></div></div>}
 
     {phase==="role"&&<div className={"overlay role-card "+role}><div><span>YOUR ROLE</span><h1>{role==="friend"?"FRIEND":"THE MIMIC"}</h1><p>{message}</p></div></div>}
 
-    {phase==="meeting"&&<div className="overlay meeting"><div className="meeting-card"><span>GARDEN MEETING</span><h2>{meetingReason}</h2><p>Who doesn't belong here?</p><div className="testimony"><b>KEEPER REPORTS</b>{testimony.map((t,i)=><div key={i}><strong>{t.name}</strong><span>{t.text}</span></div>)}</div><div className="evidence"><b>SYSTEM EVIDENCE</b>{evidence.map((e,i)=><span key={i}>• {e}</span>)}</div><div className="vote-grid">{agents.filter(a=>a.alive).map(a=><button key={a.id} onClick={()=>vote(a.id)}><b>{a.name}</b><small>{votes[a.id]?votes[a.id]+" votes":"VOTE"}</small></button>)}</div><button className="skip" onClick={()=>setPhase("play")}>SKIP VOTE</button></div></div>}
+    {phase==="meeting"&&<div className="overlay meeting"><div className="meeting-card"><span>GARDEN MEETING</span><h2>{meetingReason}</h2><p>Who doesn't belong here?</p><div className="meeting-guide"><span>1 · READ REPORTS</span><span>2 · CHECK EVIDENCE</span><span>3 · VOTE OR SKIP</span></div><div className="testimony"><b>KEEPER REPORTS</b>{testimony.map((t,i)=><div key={i}><strong>{t.name}</strong><span>{t.text}</span></div>)}</div><div className="evidence"><b>SYSTEM EVIDENCE</b>{evidence.map((e,i)=><span key={i}>• {e}</span>)}</div><div className="vote-grid">{agents.filter(a=>a.alive).map(a=><button key={a.id} onClick={()=>vote(a.id)}><b>{a.name}</b><small>{votes[a.id]?votes[a.id]+" votes":"VOTE"}</small></button>)}</div><button className="skip" onClick={()=>setPhase("play")}>SKIP VOTE</button></div></div>}
 
-    {(phase==="won"||phase==="lost")&&<div className="overlay"><div className={"end-card "+phase}><span>{phase==="won"?"NIGHT SURVIVED":"CONTAINMENT FAILED"}</span><h1>{phase==="won"?"SUNRISE":"REPLACED"}</h1><p>{message}</p><div className="ledger"><span>Role {roleLabel}</span><span>Tasks {tasksDone}/4</span><span>RF spent {rfSpent.toFixed(2)}</span><span>RF earned {rfEarned.toFixed(2)}*</span><span>Mimic {agents.find(a=>a.id==="mimic")?.name||"Unknown"}</span><span>*MVP reward simulated</span></div><div className="round-recap"><b>NIGHT LOG</b>{roundNotes.slice(-5).map((n,i)=><span key={i}>• {n}</span>)}</div><button onClick={start}>PLAY AGAIN</button></div></div>}
+    {(phase==="won"||phase==="lost")&&<div className={"overlay end-overlay "+phase}>{phase==="won"&&<><div className="sunrise-rays"/><div className="victory-particles">{Array.from({length:18},(_,i)=><i key={i} style={{left:(8+(i*17)%88)+"%",animationDelay:(i*.08)+"s"}}/> )}</div></>}<div className={"end-card "+phase}><span>{phase==="won"?"NIGHT SURVIVED":"CONTAINMENT FAILED"}</span><h1>{phase==="won"?"SUNRISE":"REPLACED"}</h1>{phase==="won"&&<div className="reward-pop"><small>SIMULATED RF REWARD</small><b>+{rewardDisplay.toFixed(2)} RF</b><em>Containment payout concept · no live reward distribution</em></div>}<p>{message}</p><div className="ledger"><span>Role {roleLabel}</span><span>Tasks {tasksDone}/4</span><span>RF spent {rfSpent.toFixed(2)}</span><span>RF earned {rfEarned.toFixed(2)}*</span><span>Mimic {agents.find(a=>a.id==="mimic")?.name||"Unknown"}</span><span>*MVP reward simulated</span></div><div className="round-recap"><b>NIGHT LOG</b>{roundNotes.slice(-5).map((n,i)=><span key={i}>• {n}</span>)}</div><button onClick={start}>PLAY AGAIN</button></div></div>}
 
     {menu==="inventory"&&<GameMenu title="RF NIGHT MARKET" onClose={()=>setMenu(null)}><div className="item-menu">
       <p className="economy-note">MVP economy · <b>{snapshot?.mode==="chain"?"Friend wallet":"Preview"} RF {formatRF(snapshot?.rfBalance)}</b>. Purchases exercise FriendSDK token activity. Burn/sink intent and win rewards are simulated for the Vibeathon prototype.</p>
-      <button disabled={busy} onClick={()=>void buyItem("flashlight",1)}><b>Flashlight · 0.10 RF</b><small>Toggle with F. Adds a warm directional beam during blackouts.</small></button>
+      <div className="shop-how"><b>HOW GEAR WORKS</b><span>1. Buy an item here.</span><span>2. Close the shop and use the new HUD button or shortcut.</span><span>3. Flashlight charge drains only while ON. Buy and consume Battery Packs to keep using it.</span></div>
+      <button disabled={busy} onClick={()=>void buyItem("flashlight",1)}><b>Flashlight · 0.10 RF</b><small>Includes a full charge. Toggle with F; charge drains while the beam is on.</small></button>
+      <button disabled={busy} onClick={()=>void buyItem("battery",1)}><b>Battery Pack · 0.10 RF</b><small>Consumable refill. After purchase press BATTERY in the HUD to restore the flashlight to 100%.</small></button>
       <button disabled={busy} onClick={()=>void buyItem("uv",2)}><b>UV Scanner · 0.20 RF</b><small>Adds a system inconsistency clue during meetings.</small></button>
       <button disabled={busy} onClick={()=>void buyItem("flare",3)}><b>Emergency Flare · 0.30 RF</b><small>Consumes one flare to restore full Garden lighting immediately.</small></button>
       <button disabled={busy} onClick={()=>void buyItem("ward",1)}><b>Ward · 0.10 RF</b><small>Consumes one Ward to cancel active Hatch sabotage immediately.</small></button>
-      <div className="inventory-line"><span>Flashlight × {inventory.flashlight}</span><span>UV × {inventory.uv}</span><span>Flare × {inventory.flare}</span><span>Ward × {inventory.ward}</span></div>
+      <div className="inventory-line"><span>Flashlight × {inventory.flashlight}</span><span>Battery × {inventory.battery}</span><span>UV × {inventory.uv}</span><span>Flare × {inventory.flare}</span><span>Ward × {inventory.ward}</span><span>Charge {Math.round(flashlightBattery)}%</span></div>
     </div></GameMenu>}
+    {menu==="map"&&<div className="map-overlay" role="dialog" aria-modal="true" aria-label="Garden map"><div className="map-panel">
+      <div className="map-head"><div><span>GARDEN UNIT 06</span><h2>FIELD MAP</h2></div><button onClick={()=>setMenu(null)}>×</button></div>
+      <p>Core chores are marked with diamonds. Explore named landmarks to learn routes and catch contradictions. Keepers are intentionally hidden from the map.</p>
+      <div className="full-map-field">
+        {ALL_ZONES.map(z=><div key={z} className={"map-marker zone "+(tasks[z]?"done":"")} style={{left:(ZONES[z].p.x/WORLD.width*100)+"%",top:(ZONES[z].p.y/WORLD.height*100)+"%"}}><i/><span>{ZONES[z].name}{tasks[z]?" ✓":""}</span></div>)}
+        {LANDMARKS.map(l=><div key={l.name} className="map-marker landmark" style={{left:(l.p.x/WORLD.width*100)+"%",top:(l.p.y/WORLD.height*100)+"%"}}><i/><span>{l.name}</span></div>)}
+        <div className="map-marker player" style={{left:(pos.current.x/WORLD.width*100)+"%",top:(pos.current.y/WORLD.height*100)+"%"}}><i/><span>YOU</span></div>
+      </div>
+      <div className="map-legend"><span><i className="you"/>You</span><span><i className="task"/>Chore</span><span><i className="place"/>Landmark</span></div>
+      <button className="map-close" onClick={()=>setMenu(null)}>RETURN TO GARDEN · M</button>
+    </div></div>}
+
+    {menu==="tutorial"&&<div className="tutorial-overlay" role="dialog" aria-modal="true" aria-label="How to play"><div className="tutorial-card" key={tutorialStep}>
+      <button className="tutorial-close" onClick={()=>{setTutorialSeen(true);setMenu(null);}}>×</button>
+      <div className="tutorial-progress">{TUTORIAL_STEPS.map((_,i)=><i key={i} className={i<=tutorialStep?"active":""}/>)}</div>
+      <span>{TUTORIAL_STEPS[tutorialStep].eyebrow}</span><h2>{TUTORIAL_STEPS[tutorialStep].title}</h2><p>{TUTORIAL_STEPS[tutorialStep].body}</p>
+      <div className={"tutorial-visual step-"+tutorialStep}><div className="tutorial-friend">FRIEND</div><div className="tutorial-icon">{["↗","✓","RF","☠","?","☀"][tutorialStep]}</div><div className="tutorial-key">{TUTORIAL_STEPS[tutorialStep].key}</div></div>
+      <div className="tutorial-actions"><button disabled={tutorialStep===0} onClick={()=>setTutorialStep(v=>Math.max(0,v-1))}>BACK</button>{tutorialStep<TUTORIAL_STEPS.length-1?<button onClick={()=>setTutorialStep(v=>Math.min(TUTORIAL_STEPS.length-1,v+1))}>NEXT</button>:<button onClick={()=>{setTutorialSeen(true);setMenu(null);setMessage("Tutorial complete. Use M for the map and G for the Night Market.");}}>ENTER THE GARDEN</button>}</div>
+    </div></div>}
+
     {menu==="settings"&&<div className="settings-backdrop" role="dialog" aria-modal="true" aria-label="Settings">
       <aside className="settings-panel">
         <div className="settings-head"><div><span>GARDEN CONTROL</span><h2>SETTINGS</h2></div><button onClick={()=>setMenu(null)} aria-label="Close settings">×</button></div>
@@ -926,7 +1005,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
 
         {settingsTab==="gameplay"&&<div className="settings-page">
           <div className="toggle-row"><span>Objective hints<small>Shows the next chore until containment is complete</small></span><button className={settings.hints?"on":""} onClick={()=>setSettings(v=>({...v,hints:!v.hints}))}>{settings.hints?"ON":"OFF"}</button></div>
-          <div className="control-grid"><span>Move</span><b>WASD / Arrows / Tap</b><span>Interact</span><b>E</b><span>Report</span><b>R</b><span>Flashlight</span><b>F</b><span>Night Market</span><b>G</b><span>Settings</span><b>Esc</b></div>
+          <div className="control-grid"><span>Move</span><b>WASD / Arrows / Tap</b><span>Interact</span><b>E</b><span>Report</span><b>R</b><span>Flashlight</span><b>F</b><span>Full map</span><b>M</b><span>Night Market</span><b>G</b><span>Settings</span><b>Esc</b></div>
+          <button className="reset-settings" onClick={()=>{setTutorialStep(0);setMenu("tutorial");}}>REPLAY HOW TO PLAY</button>
           <button className="reset-settings" onClick={()=>setSettings(DEFAULT_SETTINGS)}>RESET TO COMPETITIVE DEFAULTS</button>
           <p className="settings-note">The base deduction game stays playable without buying RF gear. Shop costs and victory rewards are simulated MVP economy concepts.</p>
         </div>}
