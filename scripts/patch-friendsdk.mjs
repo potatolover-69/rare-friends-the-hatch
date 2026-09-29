@@ -35,6 +35,51 @@ await patch("src/wallet.ts", source => source
   )
 );
 
+
+
+// Friend picker history: the Robinhood public RPC limits eth_getLogs block ranges.
+// Keep the SDK's owner-filtered discovery model, but page the exact same indexed
+// Transfer queries instead of asking one provider call to span the whole chain.
+await patch("src/owned-friends.ts", source => {
+  if (source.includes("MAX_TRANSFER_BLOCKS_PER_QUERY")) return source;
+  return source
+    .replace(
+      "const MAX_OWNED_FRIENDS = 10_000;",
+      "const MAX_OWNED_FRIENDS = 10_000;\nconst MAX_TRANSFER_BLOCKS_PER_QUERY = 10_000_000n;"
+    )
+    .replace(
+`  const query = { address: deployment.generations, event: TRANSFER, fromBlock: 0n, toBlock: blockNumber, strict: true } as const;
+  const [received, sent] = await Promise.all([
+    client.getLogs({ ...query, args: { to: account } }),
+    client.getLogs({ ...query, args: { from: account } }),
+  ]).catch(cause => {
+    active();
+    throw new Error("Could not load this account's Friend transfers. Retry with an RPC that supports owner-filtered history; the SDK will not scan the collection.", { cause });
+  });
+  active();`,
+`  const pages = [];
+  try {
+    for (let fromBlock = 0n; fromBlock <= blockNumber; fromBlock += MAX_TRANSFER_BLOCKS_PER_QUERY) {
+      active();
+      const pageEnd = fromBlock + MAX_TRANSFER_BLOCKS_PER_QUERY - 1n;
+      const toBlock = pageEnd < blockNumber ? pageEnd : blockNumber;
+      const query = { address: deployment.generations, event: TRANSFER, fromBlock, toBlock, strict: true } as const;
+      pages.push(await Promise.all([
+        client.getLogs({ ...query, args: { to: account } }),
+        client.getLogs({ ...query, args: { from: account } }),
+      ]));
+      active();
+    }
+  } catch (cause) {
+    active();
+    throw new Error("Could not load this account's Friend transfers. The preview retried with paginated owner-filtered history but the RPC still failed.", { cause });
+  }
+  const received = pages.flatMap(([page]) => page);
+  const sent = pages.flatMap(([, page]) => page);
+  active();`
+    );
+});
+
 // The preview iframe CSP must permit the fallback endpoint.
 await patch("scripts/dev-game.mjs", source => source
   .replace(
@@ -43,4 +88,4 @@ await patch("scripts/dev-game.mjs", source => source
   )
 );
 
-console.log("Patched FriendSDK with Robinhood RPC fallback.");
+console.log("Patched FriendSDK with Robinhood RPC fallback and paginated owner history.");
