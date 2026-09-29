@@ -11,8 +11,9 @@ import "./style.css";
 type Point={x:number;y:number};
 type Role="friend"|"mimic";
 type Phase="title"|"role"|"play"|"meeting"|"won"|"lost";
-type ZoneKey="lamp"|"pond"|"hatch"|"shrine";
-type Menu="store"|"inventory"|"settings"|"map"|"tutorial"|null;
+type ZoneKey="lamp"|"pond"|"hatch"|"shrine"|"shed"|"ward";
+type Menu="store"|"inventory"|"settings"|"map"|"tutorial"|"task"|null;
+type MeetingStage="report"|"testimony"|"vote";
 type Personality="careful"|"nervous"|"direct"|"quiet"|"watchful";
 type SettingsTab="graphics"|"audio"|"gameplay";
 type GameSettings={
@@ -39,18 +40,20 @@ const SPEED=245;
 const PROFILE={token:"334137",character:"Mask",scenery:"Garden",floor:"Hatch",generation:6,seed:334137};
 
 const ZONES:Record<ZoneKey,{name:string;p:Point;hint:string}>={
-  lamp:{name:"Lamp Court",p:{x:620,y:920},hint:"Restore the courtyard lights."},
-  pond:{name:"Moon Pond",p:{x:2380,y:1280},hint:"Calibrate the reflection ward."},
-  hatch:{name:"Central Hatch",p:{x:1510,y:1040},hint:"Reinforce the containment bolts."},
-  shrine:{name:"Old Shrine",p:{x:2360,y:430},hint:"Record the night seal."},
+  lamp:{name:"Lamp Court",p:{x:620,y:920},hint:"Reconnect the lamp circuit and restore the street lights."},
+  pond:{name:"Moon Pond",p:{x:2380,y:1280},hint:"Align the mirrors until the moon reflection reaches the ward."},
+  hatch:{name:"Central Hatch",p:{x:1510,y:1040},hint:"Lock the containment bolts in the correct sequence."},
+  shrine:{name:"Old Shrine",p:{x:2360,y:430},hint:"Arrange the ritual symbols in the warding order."},
+  shed:{name:"Tool Shed",p:{x:430,y:1640},hint:"Choose the correct fuse and reinstall the repair kit."},
+  ward:{name:"Memorial Ward",p:{x:1730,y:360},hint:"Re-anchor the boundary stones to the correct pattern."},
 };
 const ALL_ZONES=Object.keys(ZONES) as ZoneKey[];
 const LANDMARKS=[
-  {name:"Tool Shed",p:{x:430,y:1640}},
   {name:"North Grove",p:{x:720,y:350}},
   {name:"Broken Walk",p:{x:2440,y:1690}},
   {name:"Fog Gate",p:{x:2700,y:720}},
-  {name:"Memorial Corner",p:{x:1730,y:360}},
+  {name:"Old Well",p:{x:930,y:1530}},
+  {name:"South Arch",p:{x:1650,y:1920}},
 ] as const;
 const BOT_NAMES=["Moth","Reed","Vale","Ash","Ivy"];
 const NPC_TOKEN_IDS=[334130n,334131n,334132n,334133n,334134n];
@@ -466,10 +469,13 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const [role,setRole]=useState<Role>("friend");
   const [menu,setMenu]=useState<Menu>(null);
   const [agents,setAgents]=useState<Agent[]>([]);
-  const [tasks,setTasks]=useState<Record<ZoneKey,boolean>>({lamp:false,pond:false,hatch:false,shrine:false});
+  const [tasks,setTasks]=useState<Record<ZoneKey,boolean>>({lamp:false,pond:false,hatch:false,shrine:false,shed:false,ward:false});
+  const [unstableTasks,setUnstableTasks]=useState<Record<ZoneKey,boolean>>({lamp:false,pond:false,hatch:false,shrine:false,shed:false,ward:false});
   const [lights,setLights]=useState(true);
   const [hatchPanic,setHatchPanic]=useState(false);
   const [meetingReason,setMeetingReason]=useState("");
+  const [meetingStage,setMeetingStage]=useState<MeetingStage>("report");
+  const [speakerIndex,setSpeakerIndex]=useState(0);
   const [emergencyLeft,setEmergencyLeft]=useState(1);
   const [message,setMessage]=useState("A social-deduction horror night in Garden Unit 06.");
   const [timer,setTimer]=useState(360);
@@ -486,6 +492,14 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const [tutorialStep,setTutorialStep]=useState(0);
   const [tutorialSeen,setTutorialSeen]=useState(false);
   const [rewardDisplay,setRewardDisplay]=useState(0);
+  const [activePuzzle,setActivePuzzle]=useState<ZoneKey|null>(null);
+  const [puzzleSequence,setPuzzleSequence]=useState<number[]>([]);
+  const [mirrorAngles,setMirrorAngles]=useState<number[]>([0,0,0]);
+  const [shrineSymbols,setShrineSymbols]=useState<string[]>([]);
+  const [fuseChoice,setFuseChoice]=useState<number|null>(null);
+  const [wardStones,setWardStones]=useState<boolean[]>([false,false,false,false]);
+  const [puzzleError,setPuzzleError]=useState("");
+  const [lightsFlickering,setLightsFlickering]=useState(false);
   const [testimony,setTestimony]=useState<{name:string;text:string}[]>([]);
   const [busy,setBusy]=useState(false);
   const [muted,setMuted]=useState(false);
@@ -500,7 +514,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const nearestAlive=aliveAgents.reduce<Agent|null>((best,a)=>!best||dist(pos.current,a.p)<dist(pos.current,best.p)?a:best,null);
   const nearbyBody=bodies.find(b=>!b.reported&&near(pos.current,b.p,115));
   const nearbyZone=ALL_ZONES.find(z=>near(pos.current,ZONES[z].p,125));
-  const contextAction=nearbyBody?"REPORT "+nearbyBody.name:nearbyZone&&!tasks[nearbyZone]?"WORK · "+ZONES[nearbyZone].name:!lights&&near(pos.current,ZONES.lamp.p,130)?"RESTORE LIGHTS":hatchPanic&&near(pos.current,ZONES.hatch.p,140)?"STABILIZE HATCH":"INTERACT";
+  const contextAction=nearbyBody?"REPORT "+nearbyBody.name:nearbyZone&&!tasks[nearbyZone]?(unstableTasks[nearbyZone]?"REPAIR · ":"PUZZLE · ")+ZONES[nearbyZone].name:!lights&&near(pos.current,ZONES.lamp.p,130)?"RESTORE LIGHTS":hatchPanic&&near(pos.current,ZONES.hatch.p,140)?"STABILIZE HATCH":"INTERACT";
+  const currentZone=ALL_ZONES.find(z=>near(pos.current,ZONES[z].p,230))||null;
 
   function updateAgents(updater:(xs:Agent[])=>Agent[]){
     const next=updater(agentsRef.current);
@@ -560,6 +575,22 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     },45);
     return()=>clearInterval(t);
   },[phase,rfEarned]);
+
+  useEffect(()=>{
+    if(phase!=="meeting")return;
+    if(meetingStage==="report"){
+      const t=setTimeout(()=>{setSpeakerIndex(0);setMeetingStage("testimony");},1050);
+      return()=>clearTimeout(t);
+    }
+    if(meetingStage==="testimony"){
+      if(speakerIndex>=testimony.length-1){
+        const t=setTimeout(()=>setMeetingStage("vote"),1850);
+        return()=>clearTimeout(t);
+      }
+      const t=setTimeout(()=>setSpeakerIndex(v=>Math.min(testimony.length-1,v+1)),2100);
+      return()=>clearTimeout(t);
+    }
+  },[phase,meetingStage,speakerIndex,testimony.length]);
 
   useEffect(()=>{
     if(phase!=="play"||paused||menu)return;
@@ -754,7 +785,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   function start(){
     void hatchAudio.current?.resume();
     const chosen:Role="friend";
-    setRole(chosen);setPhase("role");setTimer(360);setLights(true);setHatchPanic(false);setTasks({lamp:false,pond:false,hatch:false,shrine:false});setEmergencyLeft(1);setKillCooldown(12);setShiftCooldown(10);setDisguise(null);setVotes({});
+    setRole(chosen);setPhase("role");setTimer(360);setLights(true);setLightsFlickering(false);setHatchPanic(false);setTasks({lamp:false,pond:false,hatch:false,shrine:false,shed:false,ward:false});setUnstableTasks({lamp:false,pond:false,hatch:false,shrine:false,shed:false,ward:false});setEmergencyLeft(1);setKillCooldown(12);setShiftCooldown(10);setDisguise(null);setVotes({});
     pos.current={...START};
     const bots=BOT_NAMES.map((name,i):Agent=>({id:"bot"+i,name,p:randPoint(i*31+7),alive:true,color:["#526858","#6b5f52","#4b606a","#6a4f55","#596149"][i],target:ZONES[ALL_ZONES[i%4]].p,speed:74+i*3,task:ALL_ZONES[i%4],cooldown:0,suspicion:0,tokenId:NPC_TOKEN_IDS[i],choreIndex:i%4,workUntil:0,lastZone:ALL_ZONES[i%4],lastAction:"heading to "+ZONES[ALL_ZONES[i%4]].name,personality:PERSONALITIES[i],reported:false,lastSeenName:null,lastSeenZone:ALL_ZONES[i%4],lastSeenAt:0}));
     if(chosen==="friend"){const culprit=PROFILE.seed%BOT_NAMES.length;bots[culprit]={...bots[culprit],id:"mimic",name:bots[culprit].name};}
@@ -767,11 +798,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     if(phase!=="play")return;
     if(role==="friend"){
       const zone=ALL_ZONES.find(z=>near(pos.current,ZONES[z].p,125));
-      if(zone&&!tasks[zone]){
-        setTasks(v=>({...v,[zone]:true}));setMessage(ZONES[zone].name+" secured. "+(tasksDone+1)+"/4 tasks complete.");setRoundNotes(prev=>[...prev.slice(-7),"You completed "+ZONES[zone].name+"."]);sound.current?.play("reward");hatchAudio.current?.cue("task");
-        if(tasksDone+1>=4)setMessage("Containment tasks complete. Now identify and eject the saboteur before sunrise.");
-        return;
-      }
+      if(zone&&!tasks[zone]){openTaskPuzzle(zone);return;}
       if(!lights&&near(pos.current,ZONES.lamp.p,130)){setLights(true);setMessage("Lamp Court restored.");return;}
       if(hatchPanic&&near(pos.current,ZONES.hatch.p,140)){setHatchPanic(false);setMessage("Hatch sabotage contained.");return;}
       reportBody();
@@ -779,6 +806,54 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       const target=nearestAlive;
       if(target&&near(pos.current,target.p,90)&&killCooldown===0){updateAgents(xs=>xs.map(a=>a.id===target.id?{...a,alive:false}:a));setKillCooldown(18);setMessage("No one saw "+target.name+" disappear.");sound.current?.play("impact");checkMimicWin();return;}
     }
+  }
+
+  function openTaskPuzzle(zone:ZoneKey){
+    setActivePuzzle(zone);setPuzzleSequence([]);setMirrorAngles([0,0,0]);setShrineSymbols([]);setFuseChoice(null);setWardStones([false,false,false,false]);setPuzzleError("");setMenu("task");
+  }
+
+  function completeTask(zone:ZoneKey){
+    setTasks(v=>({...v,[zone]:true}));setUnstableTasks(v=>({...v,[zone]:false}));setMenu(null);setActivePuzzle(null);
+    const nextCount=tasksDone+1;
+    setMessage(ZONES[zone].name+" stabilized. "+nextCount+"/"+ALL_ZONES.length+" containment tasks secure.");
+    setRoundNotes(prev=>[...prev.slice(-7),"You completed "+ZONES[zone].name+"."]);
+    sound.current?.play("reward");hatchAudio.current?.cue("task");
+    if(zone==="lamp"){setLights(true);setLightsFlickering(false);}
+    if(zone==="hatch")setHatchPanic(false);
+    if(nextCount>=ALL_ZONES.length)setMessage("All containment tasks are secure. Now expose the Mimic before sunrise.");
+  }
+
+  function sequencePress(value:number){
+    if(!activePuzzle)return;
+    const target=activePuzzle==="lamp"?[2,4,1,3]:[3,1,4,2];
+    const nextIndex=puzzleSequence.length;
+    if(value!==target[nextIndex]){setPuzzleSequence([]);setPuzzleError("Wrong connection. The circuit reset.");hatchAudio.current?.cue("danger");return;}
+    const next=[...puzzleSequence,value];setPuzzleSequence(next);setPuzzleError("");
+    if(next.length===target.length)completeTask(activePuzzle);
+  }
+
+  function checkPond(){
+    if(mirrorAngles.join(",")==="1,3,2")completeTask("pond");
+    else{setPuzzleError("The reflection misses the center seal. Keep rotating the mirrors.");hatchAudio.current?.cue("danger");}
+  }
+
+  function symbolPress(symbol:string){
+    const target=["MOON","MASK","SEED","HATCH"];
+    const next=[...shrineSymbols,symbol];
+    if(symbol!==target[shrineSymbols.length]){setShrineSymbols([]);setPuzzleError("The shrine rejects the order. The symbols fade.");return;}
+    setShrineSymbols(next);setPuzzleError("");
+    if(next.length===target.length)completeTask("shrine");
+  }
+
+  function installFuse(){
+    if(fuseChoice===20)completeTask("shed");
+    else{setPuzzleError("That fuse rating trips the relay. Choose the service fuse marked 20A.");hatchAudio.current?.cue("danger");}
+  }
+
+  function checkWard(){
+    const target=[true,false,true,true];
+    if(wardStones.every((v,i)=>v===target[i]))completeTask("ward");
+    else{setPuzzleError("The boundary hum is wrong. Re-anchor the glowing stones in the ward pattern.");hatchAudio.current?.cue("danger");}
   }
 
   function reportBody(){
@@ -824,7 +899,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       return {name:a.name,text:style[a.personality]+memory+" "+cadence[i%cadence.length]};
     });
     if(mimic&&inventory.uv>0)lines.push({name:"UV Scanner",text:"Trace mismatch detected: one Keeper's claimed route conflicts with a recent task-zone ping. Identity intentionally unresolved."});
-    setTestimony(lines);setMeetingReason(reason);setPhase("meeting");setVotes({});setMessage("Compare chores, timing, memories and contradictions. The Mimic can lie convincingly.");setRoundNotes(prev=>[...prev.slice(-7),reason]);sound.current?.play("select");hatchAudio.current?.cue("meeting");
+    setTestimony(lines);setMeetingReason(reason);setMeetingStage("report");setSpeakerIndex(0);setPhase("meeting");setVotes({});setMessage("Compare chores, timing, memories and contradictions. The Mimic can lie convincingly.");setRoundNotes(prev=>[...prev.slice(-7),reason]);sound.current?.play("select");hatchAudio.current?.cue("meeting");
   }
 
   function vote(id:string){
@@ -857,12 +932,12 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     const ejected=!tied&&top?agentsRef.current.find(a=>a.id===top[0]):null;
     setTimeout(()=>{
       if(!ejected){setMessage("Vote tied. Nobody was expelled.");setRoundNotes(prev=>[...prev.slice(-7),"Meeting ended in a tie."]);setPhase("play");return;}
-      updateAgents(xs=>xs.map(a=>a.id===ejected.id?{...a,alive:false,reported:true,lastAction:"expelled by vote"}:a));
       if(role==="friend"&&ejected.id==="mimic"){finish("won",ejected.name+" was the Mimic. The remaining Keepers seal the Hatch.");return;}
       if(role==="mimic"&&ejected.id==="mimic"){finish("lost","The Keepers identified you before the Hatch opened.");return;}
-      setRoundNotes(prev=>[...prev.slice(-7),ejected.name+" was expelled — wrong call."]);
-      setMessage(ejected.name+" was not the Mimic. The Garden just got quieter.");
-      setPhase("play");checkMimicWin();
+      setRoundNotes(prev=>[...prev.slice(-7),ejected.name+" was accused, but the evidence was wrong."]);
+      setEvidence(prev=>[...prev.slice(-3),"Vote result: "+ejected.name+" was cleared. The Mimic is still among the Keepers."]);
+      setMessage(ejected.name+" was not the Mimic. The Mimic is still among the Keepers.");
+      setPhase("play");
     },950);
   }
 
@@ -888,7 +963,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   }
 
   function finish(result:"won"|"lost",text:string){
-    if(result==="won"){const reward=tasksDone>=4?.20:.15;setRfEarned(reward);text+=" Prototype economy reward: +"+reward.toFixed(2)+" RF (simulated).";}
+    if(result==="won"){const reward=tasksDone>=ALL_ZONES.length?.20:.15;setRfEarned(reward);text+=" Prototype economy reward: +"+reward.toFixed(2)+" RF (simulated).";}
     setRoundNotes(prev=>[...prev.slice(-7),result==="won"?"The Mimic was exposed.":"Containment failed before sunrise."]);
     setPhase(result);setMessage(text);sound.current?.play(result==="won"?"reward":"impact");hatchAudio.current?.cue(result==="won"?"win":"lose");
   }
@@ -935,13 +1010,14 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     }}/>
 
     {phase==="play"&&<>
-      <div className="hud mission"><span>{roleLabel} // {clock}</span><b>{role==="friend"?"KEEP THE HATCH SEALED":"BECOME ONE OF THEM"}</b><small>{role==="friend"?tasksDone+"/4 tasks · identify the saboteur":aliveAgents.length+" Keepers remain"}</small></div>
+      <div className="hud mission"><span>{roleLabel} // {clock}</span><b>{role==="friend"?"KEEP THE HATCH SEALED":"BECOME ONE OF THEM"}</b><small>{role==="friend"?tasksDone+"/"+ALL_ZONES.length+" tasks · identify the saboteur":aliveAgents.length+" Keepers remain"}</small></div>
       <div className="hud statusbox"><b>{lights?"LIGHTS ONLINE":"BLACKOUT"}</b><span>{hatchPanic?"HATCH SABOTAGED":"Containment stable"}</span></div>
       <div className="economy-hud"><b>{snapshot?.mode==="chain"?"FRIEND WALLET":"PREVIEW"} RF {formatRF(snapshot?.rfBalance)}</b><span>Spent {rfSpent.toFixed(2)} · Win +0.15–0.20* simulated</span></div>
       <div className="friend-badge"><b>FRIEND #{friendId.toString()}</b><span>{PROFILE.character} · {PROFILE.scenery} · {PROFILE.floor} · Gen {PROFILE.generation}</span></div>
+      {currentZone&&<div className="zone-banner" key={currentZone}><b>{ZONES[currentZone].name.toUpperCase()}</b><span>{tasks[currentZone]?"SECURE":unstableTasks[currentZone]?"SABOTAGED · REPAIR REQUIRED":ZONES[currentZone].hint}</span></div>}
       <div className="utility-fabs"><button onClick={()=>setMenu("map")} aria-label="Map">MAP</button><button onClick={()=>{setTutorialStep(0);setMenu("tutorial");}} aria-label="How to play">?</button><button onClick={()=>setMenu("settings")} aria-label="Settings">⚙</button></div>
-      {settings.hints&&role==="friend"&&<div className="hint-chip">{tasksDone<4?"NEXT · "+ZONES[ALL_ZONES.find(z=>!tasks[z])||"hatch"].name:"Watch routes · compare testimony · eject the Mimic"}</div>}
-      {role==="friend"&&<div className="task-list">{ALL_ZONES.map(z=><span key={z} className={tasks[z]?"done":""}>{tasks[z]?"✓":"□"} {ZONES[z].name}</span>)}</div>}
+      {settings.hints&&role==="friend"&&<div className="hint-chip">{tasksDone<ALL_ZONES.length?"NEXT · "+ZONES[ALL_ZONES.find(z=>!tasks[z])||"hatch"].name:"Watch routes · compare testimony · eject the Mimic"}</div>}
+      {role==="friend"&&<div className="task-list">{ALL_ZONES.map(z=><span key={z} className={tasks[z]?"done":unstableTasks[z]?"unstable":""}>{tasks[z]?"✓":unstableTasks[z]?"!":"□"} {ZONES[z].name}</span>)}</div>}
       <div className="minimap" onClick={()=>setMenu("map")} role="button" aria-label="Open Garden map"><b>GARDEN MAP · M</b><div className="mini-field">
         {ALL_ZONES.map(z=><i key={z} className={"mini-zone "+(tasks[z]?"done":"")} style={{left:(ZONES[z].p.x/WORLD.width*100)+"%",top:(ZONES[z].p.y/WORLD.height*100)+"%"}} title={ZONES[z].name}/>)}
         <i className="mini-player" style={{left:(pos.current.x/WORLD.width*100)+"%",top:(pos.current.y/WORLD.height*100)+"%"}}/>
@@ -963,7 +1039,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
 
     {phase==="meeting"&&<div className="overlay meeting"><div className="meeting-card"><span>GARDEN MEETING</span><h2>{meetingReason}</h2><p>Who doesn't belong here?</p><div className="meeting-guide"><span>1 · READ REPORTS</span><span>2 · CHECK EVIDENCE</span><span>3 · VOTE OR SKIP</span></div><div className="testimony"><b>KEEPER REPORTS</b>{testimony.map((t,i)=><div key={i}><strong>{t.name}</strong><span>{t.text}</span></div>)}</div><div className="evidence"><b>SYSTEM EVIDENCE</b>{evidence.map((e,i)=><span key={i}>• {e}</span>)}</div><div className="vote-grid">{agents.filter(a=>a.alive).map(a=><button key={a.id} onClick={()=>vote(a.id)}><b>{a.name}</b><small>{votes[a.id]?votes[a.id]+" votes":"VOTE"}</small></button>)}</div><button className="skip" onClick={()=>setPhase("play")}>SKIP VOTE</button></div></div>}
 
-    {(phase==="won"||phase==="lost")&&<div className={"overlay end-overlay "+phase}>{phase==="won"&&<><div className="sunrise-rays"/><div className="victory-particles">{Array.from({length:18},(_,i)=><i key={i} style={{left:(8+(i*17)%88)+"%",animationDelay:(i*.08)+"s"}}/> )}</div></>}<div className={"end-card "+phase}><span>{phase==="won"?"NIGHT SURVIVED":"CONTAINMENT FAILED"}</span><h1>{phase==="won"?"SUNRISE":"REPLACED"}</h1>{phase==="won"&&<div className="reward-pop"><small>SIMULATED RF REWARD</small><b>+{rewardDisplay.toFixed(2)} RF</b><em>Containment payout concept · no live reward distribution</em></div>}<p>{message}</p><div className="ledger"><span>Role {roleLabel}</span><span>Tasks {tasksDone}/4</span><span>RF spent {rfSpent.toFixed(2)}</span><span>RF earned {rfEarned.toFixed(2)}*</span><span>Mimic {agents.find(a=>a.id==="mimic")?.name||"Unknown"}</span><span>*MVP reward simulated</span></div><div className="round-recap"><b>NIGHT LOG</b>{roundNotes.slice(-5).map((n,i)=><span key={i}>• {n}</span>)}</div><button onClick={start}>PLAY AGAIN</button></div></div>}
+    {(phase==="won"||phase==="lost")&&<div className={"overlay end-overlay "+phase}>{phase==="won"&&<><div className="sunrise-rays"/><div className="victory-particles">{Array.from({length:18},(_,i)=><i key={i} style={{left:(8+(i*17)%88)+"%",animationDelay:(i*.08)+"s"}}/> )}</div></>}<div className={"end-card "+phase}><span>{phase==="won"?"NIGHT SURVIVED":"CONTAINMENT FAILED"}</span><h1>{phase==="won"?"SUNRISE":"REPLACED"}</h1>{phase==="won"&&<div className="reward-pop"><small>SIMULATED RF REWARD</small><b>+{rewardDisplay.toFixed(2)} RF</b><em>Containment payout concept · no live reward distribution</em></div>}<p>{message}</p><div className="ledger"><span>Role {roleLabel}</span><span>Tasks {tasksDone}/{ALL_ZONES.length}</span><span>RF spent {rfSpent.toFixed(2)}</span><span>RF earned {rfEarned.toFixed(2)}*</span><span>Mimic {agents.find(a=>a.id==="mimic")?.name||"Unknown"}</span><span>*MVP reward simulated</span></div><div className="round-recap"><b>NIGHT LOG</b>{roundNotes.slice(-5).map((n,i)=><span key={i}>• {n}</span>)}</div><button onClick={start}>PLAY AGAIN</button></div></div>}
 
     {menu==="inventory"&&<GameMenu title="RF NIGHT MARKET" onClose={()=>setMenu(null)}><div className="item-menu">
       <p className="economy-note">MVP economy · <b>{snapshot?.mode==="chain"?"Friend wallet":"Preview"} RF {formatRF(snapshot?.rfBalance)}</b>. Purchases exercise FriendSDK token activity. Burn/sink intent and win rewards are simulated for the Vibeathon prototype.</p>
@@ -979,7 +1055,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       <div className="map-head"><div><span>GARDEN UNIT 06</span><h2>FIELD MAP</h2></div><button onClick={()=>setMenu(null)}>×</button></div>
       <p>Core chores are marked with diamonds. Explore named landmarks to learn routes and catch contradictions. Keepers are intentionally hidden from the map.</p>
       <div className="full-map-field">
-        {ALL_ZONES.map(z=><div key={z} className={"map-marker zone "+(tasks[z]?"done":"")} style={{left:(ZONES[z].p.x/WORLD.width*100)+"%",top:(ZONES[z].p.y/WORLD.height*100)+"%"}}><i/><span>{ZONES[z].name}{tasks[z]?" ✓":""}</span></div>)}
+        {ALL_ZONES.map(z=><div key={z} className={"map-marker zone "+(tasks[z]?"done":unstableTasks[z]?"unstable":"")} style={{left:(ZONES[z].p.x/WORLD.width*100)+"%",top:(ZONES[z].p.y/WORLD.height*100)+"%"}}><i/><span>{ZONES[z].name}{tasks[z]?" ✓":""}</span></div>)}
         {LANDMARKS.map(l=><div key={l.name} className="map-marker landmark" style={{left:(l.p.x/WORLD.width*100)+"%",top:(l.p.y/WORLD.height*100)+"%"}}><i/><span>{l.name}</span></div>)}
         <div className="map-marker player" style={{left:(pos.current.x/WORLD.width*100)+"%",top:(pos.current.y/WORLD.height*100)+"%"}}><i/><span>YOU</span></div>
       </div>
