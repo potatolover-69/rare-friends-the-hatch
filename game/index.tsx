@@ -9,6 +9,7 @@ import "./style.css";
 import mainMusicUrl from "./assets/jorisvermeer-ominous-horror-game-background-418850.mp3";
 import flashlightSwitchUrl from "./assets/audio/sfx_flashlight_switch.mp3";
 import streetlightFlickerUrl from "./assets/audio/sfx_streetlight_flicker.mp3";
+import pageFlipUrl from "./assets/audio/sfx_page_flip.mp3";
 
 type Point={x:number;y:number};
 type Role="friend"|"mimic";
@@ -135,7 +136,7 @@ type HatchAudio={
   set:(settings:GameSettings,muted:boolean)=>void;
   cue:(kind:"meeting"|"danger"|"task"|"vote"|"win"|"lose")=>void;
   siren:()=>void;
-  sample:(kind:"flashlight"|"streetlightFlicker")=>void;
+  sample:(kind:"flashlight"|"streetlightFlicker"|"pageFlip")=>void;
   dispose:()=>void;
 };
 
@@ -153,6 +154,7 @@ function createHatchAudio():HatchAudio|null{
   const sampleEls={
     flashlight:new Audio(FLASHLIGHT_SWITCH_URL),
     streetlightFlicker:new Audio(STREETLIGHT_FLICKER_URL),
+    pageFlip:new Audio(pageFlipUrl),
   };
   Object.values(sampleEls).forEach(el=>{el.preload="auto";});
 
@@ -181,7 +183,7 @@ function createHatchAudio():HatchAudio|null{
       osc.connect(gain).connect(sfxBus);osc.start(start);osc.stop(start+.17);
     }
   };
-  const sample=(kind:"flashlight"|"streetlightFlicker")=>{
+  const sample=(kind:"flashlight"|"streetlightFlicker"|"pageFlip")=>{
     const el=sampleEls[kind];el.pause();el.currentTime=0;void el.play().catch(()=>{});
   };
   applyVolumes();
@@ -1472,7 +1474,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
           <p>{TUTORIAL_STEPS[tutorialStep].body}</p>
           <TutorialScene step={tutorialStep} sprites={sprites} friendId={friendId}/>
           <div className="manual-control"><span>CONTROL</span><kbd>{TUTORIAL_STEPS[tutorialStep].key}</kbd></div>
-          <footer className="manual-actions"><button disabled={tutorialStep===0} onClick={()=>setTutorialStep(v=>Math.max(0,v-1))}>← PREVIOUS</button><span>Page {String(tutorialStep+1).padStart(2,"0")}</span>{tutorialStep<TUTORIAL_STEPS.length-1?<button className="primary" onClick={()=>setTutorialStep(v=>Math.min(TUTORIAL_STEPS.length-1,v+1))}>NEXT PAGE →</button>:<button className="primary" onClick={()=>{setTutorialSeen(true);setMenu(null);setMessage("Field manual closed. Survive the night.");}}>ENTER GARDEN →</button>}</footer>
+          <footer className="manual-actions"><button disabled={tutorialStep===0} onClick={()=>setTutorialStep(v=>Math.max(0,v-1))}>← PREVIOUS</button><span>Page {String(tutorialStep+1).padStart(2,"0")}</span>{tutorialStep<TUTORIAL_STEPS.length-1?<button className="primary" onClick={()=>{hatchAudio.current?.sample("pageFlip");setTutorialStep(v=>Math.min(TUTORIAL_STEPS.length-1,v+1));}}>NEXT PAGE →</button>:<button className="primary" onClick={()=>{setTutorialSeen(true);setMenu(null);setMessage("Field manual closed. Survive the night.");}}>ENTER GARDEN →</button>}</footer>
         </main>
       </div>
     </div>}
