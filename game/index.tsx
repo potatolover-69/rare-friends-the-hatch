@@ -82,17 +82,17 @@ const PERSONALITIES:Personality[]=["careful","nervous","direct","quiet","watchfu
 const DEFAULT_SETTINGS:GameSettings={graphics:"high",fps:60,cameraZoom:1,brightness:1,fog:55,grain:22,master:75,music:42,ambience:62,sfx:78,reducedMotion:false,screenShake:true,hints:true};
 const ROUND_SECONDS=360;
 const SHOP_ITEMS:{kind:ShopKind;name:string;price:string;units:number;icon:string;desc:string;use:string}[]=[
-  {kind:"flashlight",name:"Field Flashlight",price:"0.10 RF",units:1,icon:"◐",desc:"Focused beam for true blackouts. Includes a full battery.",use:"Toggle with F"},
-  {kind:"battery",name:"Battery Pack",price:"0.10 RF",units:1,icon:"▰",desc:"Consumable 100% flashlight recharge.",use:"Use from HUD"},
-  {kind:"uv",name:"UV Trace Scanner",price:"0.20 RF",units:2,icon:"UV",desc:"Adds one ambiguous route inconsistency to meetings.",use:"Passive in meetings"},
-  {kind:"flare",name:"Emergency Flare",price:"0.30 RF",units:3,icon:"✦",desc:"Temporary emergency light while the power grid is down.",use:"Use from HUD"},
-  {kind:"ward",name:"Containment Ward",price:"0.10 RF",units:1,icon:"◇",desc:"Instantly cancels an active Hatch breach.",use:"Use from HUD"},
+  {kind:"flashlight",name:"Field Flashlight",price:"0.10 RF",units:1,icon:"◐",desc:"Reusable light body with one full charge. Blackouts are the Mimic's favorite sabotage.",use:"Toggle with F"},
+  {kind:"battery",name:"Battery Pack",price:"0.15 RF",units:2,icon:"▰",desc:"Single-use full flashlight recharge. Consumed when installed.",use:"BURN · Use from HUD"},
+  {kind:"uv",name:"UV Trace Scanner",price:"0.20 RF",units:2,icon:"UV",desc:"Single-use meeting scan that adds one ambiguous route inconsistency.",use:"BURN · Meeting use"},
+  {kind:"flare",name:"Emergency Flare",price:"0.25 RF",units:3,icon:"✦",desc:"Single-use emergency light for 12 seconds. It does not repair Lamp Court.",use:"BURN · Use from HUD"},
+  {kind:"ward",name:"Containment Ward",price:"0.15 RF",units:2,icon:"◇",desc:"Single-use seal that instantly cancels an active Hatch breach.",use:"BURN · Use from HUD"},
 ];
 const TUTORIAL_STEPS=[
   {eyebrow:"01 · YOUR GOAL",title:"Two Things Win the Night",body:"Before 06:00, complete all 6 Garden station tasks AND correctly expose the hidden Mimic. You need both. Finishing only the tasks or only finding the Mimic is not enough.",key:"6/6 TASKS + MIMIC FOUND"},
   {eyebrow:"02 · MOVE + FIND STATIONS",title:"Follow the Garden Map",body:"Move with WASD / Arrow keys, or tap the ground. Press M to open the map. The six station markers are your task locations. Walk to a station until its interaction prompt appears.",key:"WASD / TAP · M MAP"},
   {eyebrow:"03 · DO A STATION TASK",title:"Press E, Then Solve It",body:"At an unfinished station, press E to open its puzzle. Read the instruction inside that puzzle and solve it. A completed station counts toward the 6/6 objective.",key:"E · INTERACT / SOLVE"},
-  {eyebrow:"04 · SABOTAGE",title:"Red Means Go There Now",body:"The Mimic can sabotage a station. A red warning appears on the HUD and on that station's map marker. Go to the marked station and repair its puzzle before the sabotage countdown reaches 0 or you lose.",key:"RED MARKER · REPAIR BEFORE 0"},
+  {eyebrow:"04 · SABOTAGE",title:"Red Means Go There Now",body:"The Mimic always attacks Lamp Court first and often returns to the lights later. A red warning appears on the HUD and map. Use your flashlight during blackouts, reach the marked station and repair it before the countdown reaches 0.",key:"RED MARKER · REPAIR BEFORE 0"},
   {eyebrow:"05 · LIGHT + OPTIONAL GEAR",title:"Use Gear When You Need It",body:"Press F to toggle your flashlight. Press G for the optional RF Night Market. Batteries, flares, UV and wards can help, but buying gear is not required to win the base game.",key:"F LIGHT · G SHOP"},
   {eyebrow:"06 · WHEN SOMEONE DIES",title:"Report a Body",body:"If you find a dead Keeper, stand close to the body and press R. This starts a meeting. AI Keepers can also discover and report bodies.",key:"R · REPORT"},
   {eyebrow:"07 · MEETING + VOTE",title:"Find the Liar",body:"Listen to each Keeper's statement and compare routes, timing, sabotage logs and what you personally saw. The Mimic can lie. Vote for the Keeper you suspect; a wrong vote returns you to the Garden.",key:"STATEMENTS → EVIDENCE → VOTE"},
@@ -258,7 +258,7 @@ function drawNpcFriend(ctx:CanvasRenderingContext2D,sprites:GenerationSprites,a:
   const facing:SpriteFacing=Math.abs(dx)>Math.abs(dy)?(dx<0?"left":"right"):(dy<0?"up":"down");
   const side=facing==="left"?"left":"right";
   const rows=spriteFrame(sprites,facing,a.workUntil<=t,Math.floor(t/120)%8,side).frame.rows;
-  const scale=4,left=Math.round(a.p.x)-32,top=Math.round(a.p.y)-62;
+  const scale=5,left=Math.round(a.p.x)-40,top=Math.round(a.p.y)-80;
   ctx.save();ctx.imageSmoothingEnabled=false;
   const shadow=ctx.createRadialGradient(a.p.x,a.p.y+4,2,a.p.x,a.p.y+4,28);shadow.addColorStop(0,"rgba(0,0,0,.55)");shadow.addColorStop(1,"rgba(0,0,0,0)");
   ctx.fillStyle=shadow;ctx.beginPath();ctx.ellipse(a.p.x,a.p.y+5,28,10,0,0,Math.PI*2);ctx.fill();
@@ -267,21 +267,21 @@ function drawNpcFriend(ctx:CanvasRenderingContext2D,sprites:GenerationSprites,a:
   ctx.fillStyle="#050605";
   rows.forEach((row,y)=>[...row].forEach((px,x)=>{if(px==="#")ctx.fillRect(left+x*scale,top+y*scale,scale,scale)}));
   ctx.fillStyle="#e8eee5";ctx.font="700 9px ui-monospace";ctx.textAlign="center";ctx.shadowColor="#000";ctx.shadowBlur=4;
-  ctx.fillText(a.name+" · #"+a.tokenId.toString(),a.p.x,a.p.y+27);
-  if(a.workUntil>t){ctx.fillStyle="rgba(232,239,228,.72)";ctx.font="700 8px ui-monospace";ctx.fillText("WORKING",a.p.x,a.p.y+39);}
+  ctx.fillText(a.name+" · #"+a.tokenId.toString(),a.p.x,a.p.y+34);
+  if(a.workUntil>t){ctx.fillStyle="rgba(232,239,228,.72)";ctx.font="700 8px ui-monospace";ctx.fillText("WORKING",a.p.x,a.p.y+47);}
   ctx.restore();
 }
 
 function drawDeadNpcFriend(ctx:CanvasRenderingContext2D,sprites:GenerationSprites,a:Agent,t:number){
   const rows=spriteFrame(sprites,"down",false,0,"right").frame.rows;
-  const scale=4,reported=a.reported;
+  const scale=5,reported=a.reported;
   ctx.save();
   const blood=ctx.createRadialGradient(a.p.x,a.p.y+10,3,a.p.x,a.p.y+10,42);
   blood.addColorStop(0,reported?"rgba(82,13,17,.34)":"rgba(125,12,19,.62)");blood.addColorStop(1,"rgba(95,10,15,0)");
   ctx.fillStyle=blood;ctx.beginPath();ctx.ellipse(a.p.x,a.p.y+10,45,18,0,0,Math.PI*2);ctx.fill();
   ctx.translate(a.p.x,a.p.y+7);ctx.rotate(Number(a.tokenId%2n)===0?-.95:.95);ctx.globalAlpha=reported?.62:.96;ctx.imageSmoothingEnabled=false;
-  rows.forEach((row,y)=>[...row].forEach((px,x)=>{if(px==="#"){ctx.fillStyle="rgba(229,236,226,.58)";ctx.fillRect(-32+x*scale-1,-58+y*scale-1,scale+2,scale+2);}}));
-  rows.forEach((row,y)=>[...row].forEach((px,x)=>{if(px==="#"){ctx.fillStyle="#050605";ctx.fillRect(-32+x*scale,-58+y*scale,scale,scale);}}));
+  rows.forEach((row,y)=>[...row].forEach((px,x)=>{if(px==="#"){ctx.fillStyle="rgba(229,236,226,.58)";ctx.fillRect(-40+x*scale-1,-72+y*scale-1,scale+2,scale+2);}}));
+  rows.forEach((row,y)=>[...row].forEach((px,x)=>{if(px==="#"){ctx.fillStyle="#050605";ctx.fillRect(-40+x*scale,-72+y*scale,scale,scale);}}));
   ctx.restore();
 
   // A faint spirit remains beside the body as a readable death state.
@@ -289,7 +289,7 @@ function drawDeadNpcFriend(ctx:CanvasRenderingContext2D,sprites:GenerationSprite
   ctx.save();ctx.globalAlpha=reported?.12:.24;ctx.imageSmoothingEnabled=false;
   const glow=ctx.createRadialGradient(gx,gy,2,gx,gy,42);glow.addColorStop(0,"rgba(215,235,223,.22)");glow.addColorStop(1,"rgba(215,235,223,0)");
   ctx.fillStyle=glow;ctx.beginPath();ctx.arc(gx,gy,42,0,Math.PI*2);ctx.fill();
-  rows.forEach((row,y)=>[...row].forEach((px,x)=>{if(px==="#"){ctx.fillStyle="#dce9df";ctx.fillRect(gx-32+x*scale,gy-38+y*scale,scale,scale);}}));
+  rows.forEach((row,y)=>[...row].forEach((px,x)=>{if(px==="#"){ctx.fillStyle="#dce9df";ctx.fillRect(gx-40+x*scale,gy-48+y*scale,scale,scale);}}));
   ctx.restore();
   ctx.save();ctx.font="700 9px Inter,Segoe UI,sans-serif";ctx.textAlign="center";ctx.fillStyle="rgba(224,231,221,.72)";ctx.fillText(a.name+" · DEAD",a.p.x,a.p.y+38);ctx.restore();
 }
@@ -959,10 +959,9 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
           const mimic=currentAgents.find(a=>a.id==="mimic");
           if(mimic?.alive){
             if(roundDeadlineRef.current>0&&!sabotageRef.current&&Date.now()>=nextSabotageAtRef.current){
-              const recent=new Set(sabotageHistoryRef.current);
-              let pool=ALL_ZONES.filter(z=>!recent.has(z));
-              if(!pool.length)pool=[...ALL_ZONES];
-              const sabotageZone=choose(pool);
+              const sabotageZone:ZoneKey=sabotageHistoryRef.current.length===0
+                ?"lamp"
+                :choose((["lamp","lamp","lamp","lamp","hatch","shed","pond","shrine","ward"] as ZoneKey[]).filter(z=>z!=="lamp"||sabotageHistoryRef.current[sabotageHistoryRef.current.length-1]!=="lamp"));
               triggerSabotage(sabotageZone);
               agentsRef.current=agentsRef.current.map(a=>a.alive&&dist(a.p,ZONES[sabotageZone].p)<280?{...a,suspicion:a.suspicion+.45}:a);
             }
@@ -1378,7 +1377,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
 
   function finish(result:"won"|"lost",text:string){
     if(roundEndedRef.current)return;roundEndedRef.current=true;setMenu(null);setFlashlightOn(false);
-    if(result==="won"){const complete=Object.values(tasksRef.current).every(Boolean),reward=complete?.20:.15;setRfEarned(reward);text+=" Prototype economy reward: +"+reward.toFixed(2)+" RF (simulated).";}
+    if(result==="won"){const complete=Object.values(tasksRef.current).every(Boolean),reward=complete?.12:.10;setRfEarned(reward);text+=" The Garden is quiet again.";}
     setRoundNotes(prev=>[...prev.slice(-8),result==="won"?"Both objectives completed before sunrise.":"The night ended in failure."]);
     setPhase(result);setMessage(text);
     if(result==="lost"){hatchAudio.current?.sample("lossJumpscare");window.setTimeout(()=>hatchAudio.current?.sample("lossGlitch"),1150);}
@@ -1460,7 +1459,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       {toastOpen&&<div className="message toast-message">{message}</div>}
     </>}
 
-    {phase==="title"&&<div className="overlay"><div className="title-card"><span>RARE FRIENDS SOCIAL HORROR · FRIEND #{friendId.toString()}</span><h1>THE HATCH</h1><p>One of the Keepers is a hidden Mimic. It will kill the team unless you identify it in a meeting.</p><div className="pitch"><b>MASK</b><span>The Mimic can copy identities.</span><b>GARDEN</b><span>A realistic night map built around your NFT.</span><b>HATCH</b><span>Keep it sealed until sunrise.</span></div><div className="audio-warning" role="note"><b>⚠ AUDIO WARNING</b><span>This game contains sudden loud sounds and jumpscares. Lower your volume before starting, especially when using headphones.</span></div><button onClick={start}>START DEDUCTION NIGHT</button><button onClick={()=>{setTutorialStep(0);setMenu("tutorial");}}>HOW TO PLAY</button><button onClick={()=>setMenu("settings")}>SETTINGS</button><small>WASD / arrows · E use · R report · F light · M map · G shop</small></div></div>}
+    {phase==="title"&&<div className="overlay"><div className="title-card"><span>RARE FRIENDS SOCIAL HORROR · FRIEND #{friendId.toString()}</span><h1>THE HATCH</h1><p>One of the Keepers is a hidden Mimic. It will kill the team unless you identify it in a meeting.</p><div className="pitch"><b>MASK</b><span>The Mimic can copy identities.</span><b>GARDEN</b><span>A realistic night map built around your NFT.</span><b>HATCH</b><span>Keep it sealed until sunrise.</span></div><div className="audio-warning" role="note"><b>⚠ AUDIO WARNING</b><span>SUDDEN LOUD AUDIO + JUMPSCARES. Lower your volume before starting. Headphone users: start low and raise it only if comfortable.</span></div><button onClick={start}>START DEDUCTION NIGHT</button><button onClick={()=>{setTutorialStep(0);setMenu("tutorial");}}>HOW TO PLAY</button><button onClick={()=>setMenu("settings")}>SETTINGS</button><small>WASD / arrows · E use · R report · F light · M map · G shop</small></div></div>}
 
     {phase==="role"&&<div className={"overlay role-card "+role}><div><span>YOUR ROLE</span><h1>{role==="friend"?"FRIEND":"THE MIMIC"}</h1><p>{message}</p></div></div>}
 
@@ -1474,7 +1473,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       {meetingStage==="vote"&&<div className="meeting-card"><span>GARDEN MEETING · {countdown} LEFT</span><h2>{meetingReason}</h2><p>Who doesn't belong here? Evidence narrows possibilities, but never names the killer for you.</p><div className="meeting-guide"><span>1 · READ REPORTS</span><span>2 · CHECK EVIDENCE</span><span>3 · VOTE OR SKIP</span></div><div className="testimony"><b>KEEPER REPORTS</b>{testimony.map((t,i)=><div key={i}><strong>{t.name}</strong><span>{t.text}</span></div>)}</div><div className="evidence"><b>SYSTEM EVIDENCE</b>{evidence.map((e,i)=><span key={i}>• {e}</span>)}</div><div className="vote-grid">{agents.filter(a=>a.alive).map(a=><button key={a.id} onClick={()=>vote(a.id)}><b>{a.name}</b><small>{votes[a.id]?votes[a.id]+" votes":"VOTE"}</small></button>)}</div><button className="skip" onClick={()=>{setMessage("No one was ejected. The Mimic is still among the Keepers.");setPhase("play");}}>SKIP VOTE</button></div>}
     </div>}
 
-    {(phase==="won"||phase==="lost")&&<div className={"overlay end-overlay "+phase}>{phase==="won"&&<><div className="sunrise-rays"/><div className="victory-particles">{Array.from({length:18},(_,i)=><i key={i} style={{left:(8+(i*17)%88)+"%",animationDelay:(i*.08)+"s"}}/> )}</div></>}<div className={"end-card "+phase}><span>{phase==="won"?"NIGHT SURVIVED":"CONTAINMENT FAILED"}</span><h1>{phase==="won"?"SUNRISE":"REPLACED"}</h1>{phase==="won"&&<div className="reward-pop"><small>SIMULATED RF REWARD</small><b>+{rewardDisplay.toFixed(2)} RF</b><em>Containment payout concept · no live reward distribution</em></div>}<p>{message}</p><div className="ledger"><span>Role {roleLabel}</span><span>Tasks {tasksDone}/{ALL_ZONES.length}</span><span>RF spent {rfSpent.toFixed(2)}</span><span>RF earned {rfEarned.toFixed(2)}*</span><span>Mimic {agents.find(a=>a.id==="mimic")?.name||"Unknown"}</span><span>*MVP reward simulated</span></div><div className="round-recap"><b>NIGHT LOG</b>{roundNotes.slice(-5).map((n,i)=><span key={i}>• {n}</span>)}</div><button onClick={start}>PLAY AGAIN</button></div></div>}
+    {(phase==="won"||phase==="lost")&&<div className={"overlay end-overlay "+phase}>{phase==="won"&&<><div className="sunrise-rays"/><div className="victory-particles">{Array.from({length:18},(_,i)=><i key={i} style={{left:(8+(i*17)%88)+"%",animationDelay:(i*.08)+"s"}}/> )}</div></>}<div className={"end-card "+phase}><span>{phase==="won"?"THE GARDEN ENDURES":"THE GARDEN TOOK YOU"}</span><h1>{phase==="won"?"DAWN":"YOU WERE REPLACED"}</h1>{phase==="won"&&<div className="reward-pop"><small>SIMULATED RF REWARD</small><b>+{rewardDisplay.toFixed(2)} RF</b><em>Containment payout concept · no live reward distribution</em></div>}<p>{message}</p><div className="ledger"><span>Role {roleLabel}</span><span>Tasks {tasksDone}/{ALL_ZONES.length}</span><span>RF spent {rfSpent.toFixed(2)}</span><span>RF earned {rfEarned.toFixed(2)}*</span><span>Mimic {agents.find(a=>a.id==="mimic")?.name||"Unknown"}</span><span>*MVP reward simulated</span></div><div className="round-recap"><b>NIGHT LOG</b>{roundNotes.slice(-5).map((n,i)=><span key={i}>• {n}</span>)}</div><button onClick={start}>PLAY AGAIN</button></div></div>}
 
     {menu==="task"&&activePuzzle&&<div className="task-overlay" role="dialog" aria-modal="true" aria-label={ZONES[activePuzzle].name+" task"}><div className={"task-puzzle task-"+activePuzzle}>
       <div className="task-puzzle-head"><div><span>CONTAINMENT TASK</span><h2>{ZONES[activePuzzle].name}</h2><p>{ZONES[activePuzzle].hint}</p></div><button onClick={()=>{setMenu(null);setActivePuzzle(null);}}>×</button></div>
@@ -1490,10 +1489,10 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     </div></div>}
 
     {menu==="inventory"&&<div className="shop-overlay" role="dialog" aria-modal="true" aria-label="RF Night Market"><section className="night-market">
-      <header className="market-head"><div><span>GARDEN SUPPLY TERMINAL · MVP ECONOMY</span><h2>RF NIGHT MARKET</h2><p>Optional gear only. The deduction round can be completed without purchases.</p></div><button onClick={()=>setMenu(null)}>×</button></header>
-      <div className="market-wallet"><div><small>{snapshot?.mode==="chain"?"FRIEND WALLET":"LOCAL PREVIEW"}</small><b>{formatRF(snapshot?.rfBalance)} RF</b></div><div><small>ROUND SPEND</small><b>{rfSpent.toFixed(2)} RF</b></div><div><small>WIN CONCEPT</small><b>+0.15–0.20 RF*</b></div></div>
+      <header className="market-head"><div><span>GARDEN SUPPLY TERMINAL · MVP ECONOMY</span><h2>RF NIGHT MARKET</h2><p>Consumable survival gear. Purchases are optional, but most utility items are burned when used.</p></div><button onClick={()=>setMenu(null)}>×</button></header>
+      <div className="market-wallet"><div><small>{snapshot?.mode==="chain"?"FRIEND WALLET":"LOCAL PREVIEW"}</small><b>{formatRF(snapshot?.rfBalance)} RF</b></div><div><small>ROUND SPEND</small><b>{rfSpent.toFixed(2)} RF</b></div><div><small>WIN CONCEPT</small><b>+0.10–0.12 RF*</b></div></div>
       {activeSabotage&&<div className="market-danger"><b>{activeSabotage.label}</b><span>{ZONES[activeSabotage.zone].name} fails in {sabotageSeconds}s — shopping does not pause it.</span></div>}
-      <div className="market-note"><b>HOW IT WORKS</b><span>Buy gear → return to the Garden → use its HUD action. Every Keeper starts with a weak 30% emergency flashlight charge; Night Market batteries and replacements extend it. Active sabotage timers keep running while this shop is open.</span></div>
+      <div className="market-note"><b>HOW IT WORKS</b><span>The Mimic targets Lamp Court first and strongly favors blackouts later, so light has real value. Every Keeper starts with a weak 30% emergency flashlight. Battery Packs, UV scans, Flares and Wards are consumables: using one burns one unit. Shop spending is intentionally faster than the simulated 0.10–0.12 RF win reward. Active sabotage keeps running while you shop.</span></div>
       <div className="market-grid">{SHOP_ITEMS.map(item=><button key={item.kind} className="market-item" disabled={busy} onClick={()=>void buyItem(item.kind,item.units)}>
         <i>{item.icon}</i><div><small>{item.use}</small><b>{item.name}</b><p>{item.desc}</p></div><strong>{item.price}</strong>
       </button>)}</div>
