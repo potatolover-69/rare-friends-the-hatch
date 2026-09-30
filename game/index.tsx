@@ -96,7 +96,7 @@ const TUTORIAL_STEPS=[
   {eyebrow:"05 · LIGHT + OPTIONAL GEAR",title:"Use Gear When You Need It",body:"Press F to toggle your flashlight. Press G for the optional RF Night Market. Batteries, flares, UV and wards can help, but buying gear is not required to win the base game.",key:"F LIGHT · G SHOP"},
   {eyebrow:"06 · WHEN SOMEONE DIES",title:"Report a Body",body:"If you find a dead Keeper, stand close to the body and press R. This starts a meeting. AI Keepers can also discover and report bodies.",key:"R · REPORT"},
   {eyebrow:"07 · MEETING + VOTE",title:"Find the Liar",body:"Listen to each Keeper's statement and compare routes, timing, sabotage logs and what you personally saw. The Mimic can lie. Vote for the Keeper you suspect; a wrong vote returns you to the Garden.",key:"STATEMENTS → EVIDENCE → VOTE"},
-  {eyebrow:"08 · START THE NIGHT",title:"The Clock Starts After This Manual",body:"The 06:00 round timer does not run while these opening instructions are on screen. Press ENTER GARDEN to start the timer, Mimic kills and the sabotage schedule. The first Lamp Court sabotage follows shortly after.",key:"CLOSE MANUAL · BEGIN ROUND"},
+  {eyebrow:"08 · START THE NIGHT",title:"The Clock Starts After This Manual",body:"The 06:00 round timer does not run while these opening instructions are on screen. Press ENTER GARDEN to begin the night. Systems can fail without warning; react to what you see and hear in the Garden.",key:"ENTER GARDEN · STAY ALERT"},
 ] as const;
 
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
@@ -842,8 +842,9 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
         setNextSabotageIn(sabotageLeft);
         if(now>=nextSabotageAtRef.current){
           nextSabotageAtRef.current=0;setNextSabotageIn(null);
-          const last=sabotageHistoryRef.current[sabotageHistoryRef.current.length-1];
-          const zone:ZoneKey=sabotageHistoryRef.current.length===0?"lamp":choose((["lamp","lamp","lamp","lamp","hatch","shed","pond","shrine","ward"] as ZoneKey[]).filter(z=>z!=="lamp"||last!=="lamp"));
+          const zone:ZoneKey=sabotageHistoryRef.current.length===0
+            ?"lamp"
+            :choose(["lamp","lamp","lamp","lamp","lamp","lamp","hatch","shed","pond","shrine","ward"] as ZoneKey[]);
           triggerSabotage(zone);
         }
       }else if(sabotageRef.current||mimicCaughtRef.current){setNextSabotageIn(null);}
@@ -1107,9 +1108,9 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     const now=Date.now();
     roundDeadlineRef.current=now+ROUND_SECONDS*1000;
     lastKill.current=performance.now();
-    nextSabotageAtRef.current=now+8000;setNextSabotageIn(8);
+    const firstDelay=10000+Math.floor(Math.random()*9000);nextSabotageAtRef.current=now+firstDelay;setNextSabotageIn(Math.ceil(firstDelay/1000));
     setTimer(ROUND_SECONDS);
-    setMessage("Night started. Secure all 6 stations before 06:00. Watch for the Mimic's sabotage.");
+    setMessage("Night started. Secure all 6 stations before 06:00. Keep moving and watch the Garden.");
   }
 
   function start(){
@@ -1150,7 +1151,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     const active=sabotageRef.current;
     if(!active||active.zone!==zone)return;
     sabotageRef.current=null;setActiveSabotage(null);setSabotageSeconds(0);setLastSabotagedZone(null);
-    const delay=16000+Math.floor(Math.random()*12000);nextSabotageAtRef.current=Date.now()+delay;setNextSabotageIn(Math.ceil(delay/1000));
+    const delay=18000+Math.floor(Math.random()*18000);nextSabotageAtRef.current=Date.now()+delay;setNextSabotageIn(Math.ceil(delay/1000));
   }
 
   function triggerSabotage(zone:ZoneKey){
@@ -1446,7 +1447,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     {activeSabotage&&(phase==="play"||phase==="meeting")&&<div className={"sabotage-countdown sabotage-"+activeSabotage.kind}><span>ACTIVE SABOTAGE</span><b>{activeSabotage.label}</b><em>{ZONES[activeSabotage.zone].name} · {sabotageSeconds}s</em><small>Repair before zero or the round ends — meetings do not pause it.</small><i style={{width:Math.max(0,Math.min(100,(sabotageSeconds/Math.max(1,(activeSabotage.deadlineAt-activeSabotage.startedAt)/1000))*100))+"%"}}/></div>}
 
     {phase==="play"&&<>
-      <div className="hud mission"><span>{roleLabel} // NIGHT WATCH</span><b>{role==="friend"?"SECURE ALL 6 STATIONS":"BECOME ONE OF THEM"}</b><small>{role==="friend"?tasksDone+"/"+ALL_ZONES.length+" stations · "+(mimicCaught?"Mimic exposed":"Mimic active"):aliveAgents.length+" Keepers remain"}</small></div>
+      <div className="hud mission"><span>{roleLabel} // NIGHT WATCH</span><b>{role==="friend"?"SECURE ALL 6 STATIONS":"BECOME ONE OF THEM"}</b><small>{role==="friend"?tasksDone+"/"+ALL_ZONES.length+" stations · "+(mimicCaught?"Mimic exposed":"Identity unknown"):aliveAgents.length+" Keepers remain"}</small></div>
       <div className="hud-right-stack">
         <div className={"hud statusbox "+(lastSabotagedZone?"danger":"")}><b>{lightsFlickering?"VOLTAGE FAILURE":lights?"LIGHTS ONLINE":"BLACKOUT"}</b><span>{lastSabotagedZone?ZONES[lastSabotagedZone].name+" · REDO REQUIRED":hatchPanic?"HATCH SABOTAGED":"Containment stable"}</span></div>
         <div className="economy-hud"><b>{snapshot?.mode==="chain"?"FRIEND WALLET":"PREVIEW"} RF {formatRF(snapshot?.rfBalance)}</b><span>Spent {rfSpent.toFixed(2)} · Win +0.10–0.12* simulated</span></div>
