@@ -687,3 +687,6 @@ linear-gradient(160deg,rgba(14,21,15,.99),rgba(3,7,4,.995));border:1px solid rgb
   .hud-right-stack span{display:none!important}
   .sabotage-countdown{top:50px!important;width:52%!important}
 }
+
+.sabotage-armed{position:absolute;z-index:124;top:53px;left:50%;transform:translateX(-50%);padding:4px 9px;border:1px solid rgba(177,54,45,.35);background:rgba(20,7,7,.82);display:flex;gap:7px;align-items:center;pointer-events:none}
+.sabotage-armed span{font:800 8px/1 Inter,sans-serif;letter-spacing:.12em;color:#d9685e}.sabotage-armed b{font:800 9px/1 ui-monospace;color:#e8c0ba}
