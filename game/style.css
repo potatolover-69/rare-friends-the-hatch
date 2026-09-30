@@ -648,3 +648,14 @@ linear-gradient(160deg,rgba(14,21,15,.99),rgba(3,7,4,.995));border:1px solid rgb
 
 .audio-warning{margin:14px 0 12px;padding:10px 12px;border:1px solid rgba(197,55,48,.62);background:linear-gradient(90deg,rgba(92,15,14,.34),rgba(18,15,14,.76));display:flex;gap:10px;align-items:center;text-align:left;box-shadow:inset 3px 0 0 #b83a32}
 .audio-warning b{flex:0 0 auto;font-size:10px;letter-spacing:.13em;color:#f07b70}.audio-warning span{font-size:10px;line-height:1.35;color:#d8cbc2}
+
+/* Clear, literal instruction diagrams */
+.objective-demo,.route-demo,.task-demo,.gear-simple-demo,.start-demo{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
+.objective-check,.task-card{border:1px solid rgba(207,218,202,.28);background:rgba(8,12,9,.72);padding:12px 16px;display:grid;gap:4px;min-width:150px;text-align:center}
+.objective-check b{font:800 22px/1 ui-monospace;color:#d9e5d5}.objective-check span,.task-card span{font:700 9px/1.35 Inter,sans-serif;letter-spacing:.08em;color:#c5d0c1}
+.route-player,.route-map,.route-station{padding:12px 16px;border:1px solid rgba(201,214,197,.3);font:800 10px ui-monospace;background:#0c110d}.route-map{font-size:18px}.route-demo small,.gear-simple-demo small,.start-demo small{flex-basis:100%;text-align:center;color:#8f9d8c;letter-spacing:.09em}
+.task-demo>i,.route-demo>i,.start-demo>i{font-style:normal;color:#82917f}.task-demo>strong{color:#b9d5b3;font:800 12px ui-monospace}
+.danger-route{padding:9px 12px;border:1px solid rgba(210,58,50,.48);background:rgba(90,12,12,.28);color:#ef8b80;font:800 10px ui-monospace}
+.gear-simple-demo kbd,.report-steps kbd{min-width:36px;text-align:center;padding:8px;border:1px solid rgba(214,224,209,.35);background:#111712;color:#e3ebe0}
+.gear-simple-demo span{font:700 9px Inter,sans-serif;color:#cbd5c7}.report-steps{display:flex;align-items:center;gap:10px;font:700 9px Inter,sans-serif;color:#cbd5c7}
+.start-demo>b{font:800 26px ui-monospace;color:#dce7d8}.start-demo>span{font:700 9px Inter,sans-serif;color:#9eaa9b}.start-demo>strong{padding:10px 14px;border:1px solid rgba(167,196,158,.45);background:rgba(73,101,66,.22);font:800 10px Inter,sans-serif;color:#d7e6d2}
