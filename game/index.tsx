@@ -142,63 +142,58 @@ type HatchAudio={
 function createHatchAudio():HatchAudio|null{
   if(typeof window==="undefined")return null;
   const AudioCtor=window.AudioContext||(window as typeof window & {webkitAudioContext?:typeof AudioContext}).webkitAudioContext;
-  if(!AudioCtor)return null;
-  const context=new AudioCtor();
-  const master=context.createGain(),music=context.createGain(),ambience=context.createGain(),sfx=context.createGain();
-  master.connect(context.destination);music.connect(master);ambience.connect(master);sfx.connect(master);
+  const context=AudioCtor?new AudioCtor():null;
+  const sfxBus=context?.createGain()||null;
+  if(sfxBus&&context)sfxBus.connect(context.destination);
 
+  // Use native HTMLAudioElement playback for bundled music/SFX. This avoids
+  // MediaElementAudioSource/CORS/autoplay routing failures inside embedded hosts.
   const track=new Audio(MAIN_MUSIC_URL);
-  track.preload="auto";track.loop=true;track.crossOrigin="anonymous";
-  let trackSource:MediaElementAudioSourceNode|null=null;
-  try{trackSource=context.createMediaElementSource(track);trackSource.connect(music);}catch{}
-  track.addEventListener("error",()=>track.pause());
-
+  track.preload="auto";track.loop=true;
   const sampleEls={
     flashlight:new Audio(FLASHLIGHT_SWITCH_URL),
     streetlightFlicker:new Audio(STREETLIGHT_FLICKER_URL),
   };
-  const sampleSources:MediaElementAudioSourceNode[]=[];
-  Object.values(sampleEls).forEach(el=>{
-    el.preload="auto";el.crossOrigin="anonymous";
-    try{const source=context.createMediaElementSource(el);source.connect(sfx);sampleSources.push(source);}catch{}
-  });
+  Object.values(sampleEls).forEach(el=>{el.preload="auto";});
 
-  const drone=context.createOscillator(),droneFilter=context.createBiquadFilter(),droneGain=context.createGain();
-  drone.type="sine";drone.frequency.value=55;droneFilter.type="lowpass";droneFilter.frequency.value=180;droneGain.gain.value=.025;
-  drone.connect(droneFilter).connect(droneGain).connect(ambience);drone.start();
-
-  const tone=context.createOscillator(),toneGain=context.createGain();
-  tone.type="triangle";tone.frequency.value=82.5;toneGain.gain.value=.004;tone.connect(toneGain).connect(music);tone.start();
-
-  const set=(settings:GameSettings,muted:boolean)=>{
-    const off=muted?0:1;
-    master.gain.setTargetAtTime(off*settings.master/100,context.currentTime,.08);
-    music.gain.setTargetAtTime(settings.music/100,context.currentTime,.08);
-    ambience.gain.setTargetAtTime(settings.ambience/100,context.currentTime,.08);
-    sfx.gain.setTargetAtTime(settings.sfx/100,context.currentTime,.04);
+  let currentSettings:GameSettings=DEFAULT_SETTINGS,currentMuted=false;
+  const applyVolumes=()=>{
+    const master=currentMuted?0:currentSettings.master/100;
+    track.muted=currentMuted;track.volume=Math.max(0,Math.min(1,master*(currentSettings.music/100)));
+    Object.values(sampleEls).forEach(el=>{el.muted=currentMuted;el.volume=Math.max(0,Math.min(1,master*(currentSettings.sfx/100)));});
+    if(sfxBus&&context)sfxBus.gain.setTargetAtTime(master*(currentSettings.sfx/100),context.currentTime,.04);
   };
+  const set=(settings:GameSettings,muted:boolean)=>{currentSettings=settings;currentMuted=muted;applyVolumes();};
   const cue=(kind:"meeting"|"danger"|"task"|"vote"|"win"|"lose")=>{
-    if(context.state!=="running")return;
+    if(!context||context.state!=="running"||!sfxBus)return;
     const osc=context.createOscillator(),gain=context.createGain();
     const freq={meeting:196,danger:73,task:392,vote:220,win:523.25,lose:82.5}[kind];
     osc.type=kind==="danger"||kind==="lose"?"sawtooth":"sine";osc.frequency.value=freq;
     gain.gain.setValueAtTime(0,context.currentTime);gain.gain.linearRampToValueAtTime(.11,context.currentTime+.015);gain.gain.exponentialRampToValueAtTime(.001,context.currentTime+.32);
-    osc.connect(gain).connect(sfx);osc.start();osc.stop(context.currentTime+.34);
+    osc.connect(gain).connect(sfxBus);osc.start();osc.stop(context.currentTime+.34);
   };
   const siren=()=>{
-    if(context.state!=="running")return;
+    if(!context||context.state!=="running"||!sfxBus)return;
     for(let i=0;i<6;i++){
       const osc=context.createOscillator(),gain=context.createGain(),start=context.currentTime+i*.18;
       osc.type="square";osc.frequency.value=i%2===0?520:760;
       gain.gain.setValueAtTime(.001,start);gain.gain.linearRampToValueAtTime(.055,start+.02);gain.gain.exponentialRampToValueAtTime(.001,start+.16);
-      osc.connect(gain).connect(sfx);osc.start(start);osc.stop(start+.17);
+      osc.connect(gain).connect(sfxBus);osc.start(start);osc.stop(start+.17);
     }
   };
   const sample=(kind:"flashlight"|"streetlightFlicker")=>{
-    if(context.state!=="running")return;
     const el=sampleEls[kind];el.pause();el.currentTime=0;void el.play().catch(()=>{});
   };
-  return {resume:async()=>{if(context.state==="suspended")await context.resume();if(track.paused){try{await track.play();}catch{}}},set,cue,siren,sample,dispose:()=>{try{track.pause();track.src="";trackSource?.disconnect();Object.values(sampleEls).forEach(el=>{el.pause();el.src="";});sampleSources.forEach(node=>node.disconnect());drone.stop();tone.stop();void context.close();}catch{}}};
+  applyVolumes();
+  return {
+    resume:async()=>{
+      if(context?.state==="suspended")await context.resume().catch(()=>{});
+      applyVolumes();
+      if(track.paused){try{await track.play();}catch{}}
+    },
+    set,cue,siren,sample,
+    dispose:()=>{try{track.pause();track.src="";Object.values(sampleEls).forEach(el=>{el.pause();el.src="";});if(context)void context.close();}catch{}}
+  };
 }
 
 function FriendPortrait({sprites,name}:{sprites?:GenerationSprites;name:string}){
@@ -1047,6 +1042,15 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
             ctx.beginPath();ctx.ellipse(ex-7,ey,3.2,1.7,0,0,Math.PI*2);ctx.ellipse(ex+7,ey,3.2,1.7,0,0,Math.PI*2);ctx.fill();ctx.restore();
           }
         }
+      }
+      if(lights&&inventory.flashlight>0&&flashlightOn&&flashlightBattery>0){
+        const dir=facing.current==="right"?0:facing.current==="left"?Math.PI:facing.current==="down"?Math.PI/2:-Math.PI/2;
+        const length=360,spread=.36;
+        ctx.save();ctx.globalCompositeOperation="screen";
+        ctx.beginPath();ctx.moveTo(sx,sy);ctx.arc(sx,sy,length,dir-spread,dir+spread);ctx.closePath();ctx.clip();
+        const beam=ctx.createRadialGradient(sx,sy,5,sx+Math.cos(dir)*145,sy+Math.sin(dir)*145,length);
+        beam.addColorStop(0,"rgba(255,249,220,.34)");beam.addColorStop(.45,"rgba(255,240,190,.18)");beam.addColorStop(1,"rgba(255,230,165,0)");
+        ctx.fillStyle=beam;ctx.fillRect(0,0,VIEW.width,VIEW.height);ctx.restore();
       }
       ctx.save();ctx.scale(zoom,zoom);ctx.translate(-cam.current.x+shakeX/zoom,-cam.current.y+shakeY/zoom);drawFriend(ctx,sprites,p,facing.current,dist(before,p)>.1,Math.floor(now/110)%8,side.current);ctx.restore();
 
