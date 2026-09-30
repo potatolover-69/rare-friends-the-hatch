@@ -83,10 +83,10 @@ const DEFAULT_SETTINGS:GameSettings={graphics:"high",fps:60,cameraZoom:1,brightn
 const ROUND_SECONDS=360;
 const SHOP_ITEMS:{kind:ShopKind;name:string;price:string;units:number;icon:string;desc:string;use:string}[]=[
   {kind:"flashlight",name:"Field Flashlight",price:"0.10 RF",units:1,icon:"◐",desc:"Reusable light body with one full charge. Blackouts are the Mimic's favorite sabotage.",use:"Toggle with F"},
-  {kind:"battery",name:"Battery Pack",price:"0.15 RF",units:2,icon:"▰",desc:"Single-use full flashlight recharge. Consumed when installed.",use:"BURN · Use from HUD"},
+  {kind:"battery",name:"Battery Pack",price:"0.20 RF",units:2,icon:"▰",desc:"Single-use full flashlight recharge. Consumed when installed.",use:"BURN · Use from HUD"},
   {kind:"uv",name:"UV Trace Scanner",price:"0.20 RF",units:2,icon:"UV",desc:"Single-use meeting scan that adds one ambiguous route inconsistency.",use:"BURN · Meeting use"},
-  {kind:"flare",name:"Emergency Flare",price:"0.25 RF",units:3,icon:"✦",desc:"Single-use emergency light for 12 seconds. It does not repair Lamp Court.",use:"BURN · Use from HUD"},
-  {kind:"ward",name:"Containment Ward",price:"0.15 RF",units:2,icon:"◇",desc:"Single-use seal that instantly cancels an active Hatch breach.",use:"BURN · Use from HUD"},
+  {kind:"flare",name:"Emergency Flare",price:"0.30 RF",units:3,icon:"✦",desc:"Single-use emergency light for 12 seconds. It does not repair Lamp Court.",use:"BURN · Use from HUD"},
+  {kind:"ward",name:"Containment Ward",price:"0.20 RF",units:2,icon:"◇",desc:"Single-use seal that instantly cancels an active Hatch breach.",use:"BURN · Use from HUD"},
 ];
 const TUTORIAL_STEPS=[
   {eyebrow:"01 · YOUR GOAL",title:"Two Things Win the Night",body:"Before 06:00, complete all 6 Garden station tasks AND correctly expose the hidden Mimic. You need both. Finishing only the tasks or only finding the Mimic is not enough.",key:"6/6 TASKS + MIMIC FOUND"},
@@ -1492,7 +1492,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       <header className="market-head"><div><span>GARDEN SUPPLY TERMINAL · MVP ECONOMY</span><h2>RF NIGHT MARKET</h2><p>Consumable survival gear. Purchases are optional, but most utility items are burned when used.</p></div><button onClick={()=>setMenu(null)}>×</button></header>
       <div className="market-wallet"><div><small>{snapshot?.mode==="chain"?"FRIEND WALLET":"LOCAL PREVIEW"}</small><b>{formatRF(snapshot?.rfBalance)} RF</b></div><div><small>ROUND SPEND</small><b>{rfSpent.toFixed(2)} RF</b></div><div><small>WIN CONCEPT</small><b>+0.10–0.12 RF*</b></div></div>
       {activeSabotage&&<div className="market-danger"><b>{activeSabotage.label}</b><span>{ZONES[activeSabotage.zone].name} fails in {sabotageSeconds}s — shopping does not pause it.</span></div>}
-      <div className="market-note"><b>HOW IT WORKS</b><span>The Mimic targets Lamp Court first and strongly favors blackouts later, so light has real value. Every Keeper starts with a weak 30% emergency flashlight. Battery Packs, UV scans, Flares and Wards are consumables: using one burns one unit. Shop spending is intentionally faster than the simulated 0.10–0.12 RF win reward. Active sabotage keeps running while you shop.</span></div>
+      <div className="market-note"><b>HOW IT WORKS</b><span>The Mimic targets Lamp Court first and strongly favors blackouts later, so light has real value. Every Keeper starts with a weak 30% emergency flashlight. Battery Packs, UV scans, Flares and Wards are consumables: using one burns one unit. Most useful purchases cost 0.20–0.30 RF while a win concept earns 0.10–0.12 RF, so utility burns faster than it is earned. Active sabotage keeps running while you shop.</span></div>
       <div className="market-grid">{SHOP_ITEMS.map(item=><button key={item.kind} className="market-item" disabled={busy} onClick={()=>void buyItem(item.kind,item.units)}>
         <i>{item.icon}</i><div><small>{item.use}</small><b>{item.name}</b><p>{item.desc}</p></div><strong>{item.price}</strong>
       </button>)}</div>
