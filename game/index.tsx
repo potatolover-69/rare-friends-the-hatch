@@ -6,6 +6,9 @@ import type { GameSnapshot } from "@rarefriends/friendsdk/game";
 import { createFriendReader, spriteFrame, type GenerationSprites, type SpriteFacing } from "@rarefriends/friendsdk/sprites";
 import { createFriendSoundKit, type FriendSoundKit } from "@rarefriends/friendsdk/sounds";
 import "./style.css";
+import mainMusicUrl from "./assets/jorisvermeer-ominous-horror-game-background-418850.mp3";
+import flashlightSwitchUrl from "./assets/audio/sfx_flashlight_switch.mp3";
+import streetlightFlickerUrl from "./assets/audio/sfx_streetlight_flicker.mp3";
 
 type Point={x:number;y:number};
 type Role="friend"|"mimic";
@@ -41,9 +44,9 @@ const WORLD={width:3000,height:2100};
 const START={x:1500,y:1870};
 const SPEED=245;
 const PROFILE={token:"334137",character:"Mask",scenery:"Garden",floor:"Hatch",generation:6,seed:334137};
-const MAIN_MUSIC_URL="./assets/jorisvermeer-ominous-horror-game-background-418850.mp3";
-const FLASHLIGHT_SWITCH_URL="https://raw.githubusercontent.com/potatolover-69/rare-friends-the-hatch/main/game/assets/audio/sfx_flashlight_switch.mp3";
-const STREETLIGHT_FLICKER_URL="https://raw.githubusercontent.com/potatolover-69/rare-friends-the-hatch/main/game/assets/audio/sfx_streetlight_flicker.mp3";
+const MAIN_MUSIC_URL=mainMusicUrl;
+const FLASHLIGHT_SWITCH_URL=flashlightSwitchUrl;
+const STREETLIGHT_FLICKER_URL=streetlightFlickerUrl;
 
 const ZONES:Record<ZoneKey,{name:string;p:Point;hint:string}>={
   lamp:{name:"Lamp Court",p:{x:620,y:920},hint:"Reconnect the lamp circuit and restore the street lights."},
