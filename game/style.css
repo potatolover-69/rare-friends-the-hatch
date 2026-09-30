@@ -674,3 +674,16 @@ linear-gradient(160deg,rgba(14,21,15,.99),rgba(3,7,4,.995));border:1px solid rgb
 .end-card.lost h1{position:relative;color:#b30f1d!important;text-shadow:0 2px 0 #310006,0 0 14px rgba(207,9,25,.38)!important;letter-spacing:.07em!important;transform:rotate(-1deg)}
 .end-card.lost h1:after{content:"";position:absolute;left:9%;right:7%;bottom:-7px;height:7px;background:linear-gradient(90deg,transparent,#8c0711 12% 17%,transparent 19% 32%,#a50a15 34% 47%,transparent 49% 65%,#72050d 67% 73%,transparent);filter:blur(.5px)}
 .end-card.lost>span{color:#e15b62!important}.end-card.lost p{color:#d8b9b8!important}
+
+/* Unified gameplay HUD layout — prevent independent fixed panels from colliding. */
+.hud-right-stack{position:absolute;z-index:122;right:10px;top:12px;width:210px;display:flex;flex-direction:column;align-items:stretch;gap:6px;pointer-events:none}
+.hud-right-stack .statusbox,.hud-right-stack .economy-hud,.hud-right-stack .friend-badge{position:relative!important;inset:auto!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;width:100%!important;max-width:none!important;margin:0!important;transform:none!important}
+.hud-right-stack .statusbox{padding:7px 9px!important}.hud-right-stack .economy-hud,.hud-right-stack .friend-badge{padding:6px 9px!important}
+.sabotage-countdown{left:50%!important;right:auto!important;top:60px!important;transform:translateX(-50%)!important;width:min(360px,42%)!important}
+.round-clock-global{top:8px!important}
+@media(max-width:700px){
+  .hud-right-stack{right:6px;top:7px;width:132px;gap:3px}
+  .hud-right-stack .statusbox,.hud-right-stack .economy-hud,.hud-right-stack .friend-badge{padding:4px 6px!important}
+  .hud-right-stack span{display:none!important}
+  .sabotage-countdown{top:50px!important;width:52%!important}
+}
