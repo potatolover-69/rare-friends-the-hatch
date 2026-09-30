@@ -12,6 +12,10 @@ import streetlightFlickerUrl from "./assets/audio/sfx_streetlight_flicker.mp3";
 import pageFlipUrl from "./assets/audio/sfx_page_flip.mp3";
 import sabotageHitUrl from "./assets/audio/sfx_sabotage_hit.mp3";
 import sabotage10sUrl from "./assets/audio/sfx_sabotage_10s.mp3";
+import lossJumpscareUrl from "./assets/audio/sound_effects75-main-jumpscare-sound-511350.mp3";
+import lossGlitchUrl from "./assets/audio/freesound_community-tv-glitch-6245.mp3";
+import mimicFoundUrl from "./assets/audio/u_5ctd89ak2s-kids-cheering-335547.mp3";
+import uiClickUrl from "./assets/audio/emilianodleon-select-button-ui-395763.mp3";
 
 type Point={x:number;y:number};
 type Role="friend"|"mimic";
@@ -138,7 +142,7 @@ type HatchAudio={
   set:(settings:GameSettings,muted:boolean)=>void;
   cue:(kind:"meeting"|"danger"|"task"|"vote"|"win"|"lose")=>void;
   siren:()=>void;
-  sample:(kind:"flashlight"|"streetlightFlicker"|"pageFlip"|"sabotageHit"|"sabotage10s")=>void;
+  sample:(kind:"flashlight"|"streetlightFlicker"|"pageFlip"|"sabotageHit"|"sabotage10s"|"lossJumpscare"|"lossGlitch"|"mimicFound"|"uiClick")=>void;
   dispose:()=>void;
 };
 
@@ -159,6 +163,10 @@ function createHatchAudio():HatchAudio|null{
     pageFlip:new Audio(pageFlipUrl),
     sabotageHit:new Audio(sabotageHitUrl),
     sabotage10s:new Audio(sabotage10sUrl),
+    lossJumpscare:new Audio(lossJumpscareUrl),
+    lossGlitch:new Audio(lossGlitchUrl),
+    mimicFound:new Audio(mimicFoundUrl),
+    uiClick:new Audio(uiClickUrl),
   };
   Object.values(sampleEls).forEach(el=>{el.preload="auto";});
 
@@ -168,7 +176,7 @@ function createHatchAudio():HatchAudio|null{
     track.muted=currentMuted;track.volume=Math.max(0,Math.min(1,master*(currentSettings.music/100)));
     Object.entries(sampleEls).forEach(([kind,el])=>{
       el.muted=currentMuted;
-      const trim=kind==="sabotageHit"?.82:kind==="sabotage10s"?.95:1;
+      const trim=kind==="sabotageHit"?.82:kind==="sabotage10s"?.95:kind==="lossJumpscare"?.72:kind==="lossGlitch"?.48:kind==="mimicFound"?.9:kind==="uiClick"?.78:1;
       el.volume=Math.max(0,Math.min(1,master*(currentSettings.sfx/100)*trim));
     });
     if(sfxBus&&context)sfxBus.gain.setTargetAtTime(master*(currentSettings.sfx/100),context.currentTime,.04);
@@ -191,7 +199,7 @@ function createHatchAudio():HatchAudio|null{
       osc.connect(gain).connect(sfxBus);osc.start(start);osc.stop(start+.17);
     }
   };
-  const sample=(kind:"flashlight"|"streetlightFlicker"|"pageFlip"|"sabotageHit"|"sabotage10s")=>{
+  const sample=(kind:"flashlight"|"streetlightFlicker"|"pageFlip"|"sabotageHit"|"sabotage10s"|"lossJumpscare"|"lossGlitch"|"mimicFound"|"uiClick")=>{
     const el=sampleEls[kind];el.pause();el.currentTime=0;void el.play().catch(()=>{});
   };
   applyVolumes();
@@ -669,6 +677,7 @@ function sabotageMeta(zone:ZoneKey){
 }
 
 export default function TheHatch({friendId,client,paused}:GameComponentProps){
+  const sectionRef=useRef<HTMLElement>(null);
   const canvas=useRef<HTMLCanvasElement>(null);
   const pos=useRef<Point>({...START});
   const cam=useRef<Point>({x:0,y:0});
@@ -861,6 +870,19 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     if(phase!=="play")return;
     const t=setInterval(()=>{setKillCooldown(v=>Math.max(0,v-1));setShiftCooldown(v=>Math.max(0,v-1));},1000);return()=>clearInterval(t);
   },[phase]);
+
+  useEffect(()=>{
+    const root=sectionRef.current;if(!root)return;
+    const onUiClick=(event:MouseEvent)=>{
+      const target=(event.target as HTMLElement|null)?.closest("button,[role='button']") as HTMLElement|null;
+      if(!target||target.hasAttribute("disabled"))return;
+      const label=target.textContent||"";
+      if(label.includes("NEXT PAGE")||label.includes("LIGHT "))return;
+      hatchAudio.current?.sample("uiClick");
+    };
+    root.addEventListener("click",onUiClick);
+    return()=>root.removeEventListener("click",onUiClick);
+  },[]);
 
   useEffect(()=>{
     const body=document.body;const prev=body.dataset.hatchMood;
@@ -1309,7 +1331,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     window.setTimeout(()=>{
       if(!accused){setMessage("Vote tied. Nobody was detained. The Mimic is still among the Keepers.");setRoundNotes(prev=>[...prev.slice(-8),"Meeting ended in a tie."]);setPhase("play");return;}
       if(role==="friend"&&accused.id==="mimic"){
-        mimicCaughtRef.current=true;setMimicCaught(true);
+        mimicCaughtRef.current=true;setMimicCaught(true);hatchAudio.current?.sample("mimicFound");
         updateAgents(xs=>xs.map(a=>a.id==="mimic"?{...a,alive:false,reported:true,lastAction:"detained after the vote"}:a));
         setMilestone("MIMIC EXPOSED");window.setTimeout(()=>setMilestone(null),2500);
         const done=Object.values(tasksRef.current).every(Boolean);
@@ -1348,7 +1370,9 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     if(roundEndedRef.current)return;roundEndedRef.current=true;setMenu(null);setFlashlightOn(false);
     if(result==="won"){const complete=Object.values(tasksRef.current).every(Boolean),reward=complete?.20:.15;setRfEarned(reward);text+=" Prototype economy reward: +"+reward.toFixed(2)+" RF (simulated).";}
     setRoundNotes(prev=>[...prev.slice(-8),result==="won"?"Both objectives completed before sunrise.":"The night ended in failure."]);
-    setPhase(result);setMessage(text);sound.current?.play(result==="won"?"reward":"impact");hatchAudio.current?.cue(result==="won"?"win":"lose");
+    setPhase(result);setMessage(text);
+    if(result==="lost"){hatchAudio.current?.sample("lossJumpscare");window.setTimeout(()=>hatchAudio.current?.sample("lossGlitch"),1150);}
+    else{sound.current?.play("reward");hatchAudio.current?.cue("win");}
   }
 
   async function buyItem(kind:ShopKind,units:number){
@@ -1394,7 +1418,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const roleLabel=role==="friend"?"FRIEND":"MIMIC";
 
   const sectionStyle={"--game-brightness":String(settings.brightness),"--grain-opacity":String(settings.grain/100)} as CSSProperties;
-  return <section style={sectionStyle} data-quality={settings.graphics} className={"deduction-game "+(!lights?"blackout ":"")+(hatchPanic?"breach ":"")+(settings.reducedMotion?" reduced-motion":"")}>
+  return <section ref={sectionRef} style={sectionStyle} data-quality={settings.graphics} className={"deduction-game "+(!lights?"blackout ":"")+(hatchPanic?"breach ":"")+(settings.reducedMotion?" reduced-motion":"")}>
     <canvas ref={canvas} width={VIEW.width} height={VIEW.height} className="game-canvas" onPointerDown={e=>{
       if(phase!=="play"||paused||menu)return;const r=e.currentTarget.getBoundingClientRect();destination.current={x:cam.current.x+((e.clientX-r.left)*VIEW.width/r.width)/settings.cameraZoom,y:cam.current.y+((e.clientY-r.top)*VIEW.height/r.height)/settings.cameraZoom};
     }}/>
