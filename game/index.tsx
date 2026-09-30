@@ -1102,7 +1102,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     const now=Date.now();
     roundDeadlineRef.current=now+ROUND_SECONDS*1000;
     lastKill.current=performance.now();
-    nextSabotageAtRef.current=now+24000+Math.floor(Math.random()*15000);
+    nextSabotageAtRef.current=now+8000;
     setTimer(ROUND_SECONDS);
     setMessage("Night started. Complete all 6 stations and expose the Mimic before 06:00.");
   }
@@ -1145,7 +1145,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     const active=sabotageRef.current;
     if(!active||active.zone!==zone)return;
     sabotageRef.current=null;setActiveSabotage(null);setSabotageSeconds(0);setLastSabotagedZone(null);
-    nextSabotageAtRef.current=Date.now()+22000+Math.floor(Math.random()*18000);
+    nextSabotageAtRef.current=Date.now()+16000+Math.floor(Math.random()*12000);
   }
 
   function triggerSabotage(zone:ZoneKey){
@@ -1436,10 +1436,12 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
 
     {phase==="play"&&<>
       <div className="hud mission"><span>{roleLabel} // {clock} · {countdown} LEFT</span><b>{role==="friend"?"SECURE THE GARDEN + EXPOSE THE MIMIC":"BECOME ONE OF THEM"}</b><small>{role==="friend"?tasksDone+"/"+ALL_ZONES.length+" stations · "+(mimicCaught?"Mimic caught":"Mimic unknown"):aliveAgents.length+" Keepers remain"}</small></div>
-      <div className={"hud statusbox "+(lastSabotagedZone?"danger":"")}><b>{lightsFlickering?"VOLTAGE FAILURE":lights?"LIGHTS ONLINE":"BLACKOUT"}</b><span>{lastSabotagedZone?ZONES[lastSabotagedZone].name+" · REDO REQUIRED":hatchPanic?"HATCH SABOTAGED":"Containment stable"}</span></div>
+      <div className="hud-right-stack">
+        <div className={"hud statusbox "+(lastSabotagedZone?"danger":"")}><b>{lightsFlickering?"VOLTAGE FAILURE":lights?"LIGHTS ONLINE":"BLACKOUT"}</b><span>{lastSabotagedZone?ZONES[lastSabotagedZone].name+" · REDO REQUIRED":hatchPanic?"HATCH SABOTAGED":"Containment stable"}</span></div>
+        <div className="economy-hud"><b>{snapshot?.mode==="chain"?"FRIEND WALLET":"PREVIEW"} RF {formatRF(snapshot?.rfBalance)}</b><span>Spent {rfSpent.toFixed(2)} · Win +0.10–0.12* simulated</span></div>
+        <div className="friend-badge"><b>FRIEND #{friendId.toString()}</b><span>{PROFILE.character} · {PROFILE.scenery} · {PROFILE.floor} · Gen {PROFILE.generation}</span></div>
+      </div>
       {milestone&&<div className="milestone-pop"><b>{milestone}</b><span>{mimicCaughtRef.current&&Object.values(tasksRef.current).every(Boolean)?"Both objectives complete.":"Keep moving — the round clock is still running."}</span></div>}
-      <div className="economy-hud"><b>{snapshot?.mode==="chain"?"FRIEND WALLET":"PREVIEW"} RF {formatRF(snapshot?.rfBalance)}</b><span>Spent {rfSpent.toFixed(2)} · Win +0.15–0.20* simulated</span></div>
-      <div className="friend-badge"><b>FRIEND #{friendId.toString()}</b><span>{PROFILE.character} · {PROFILE.scenery} · {PROFILE.floor} · Gen {PROFILE.generation}</span></div>
       {currentZone&&<div className="zone-banner" key={currentZone}><b>{ZONES[currentZone].name.toUpperCase()}</b><span>{tasks[currentZone]?"SECURE":unstableTasks[currentZone]?"SABOTAGED · REPAIR REQUIRED":ZONES[currentZone].hint}</span></div>}
       <div className="utility-fabs"><button onClick={()=>setMenu("map")} aria-label="Map">MAP</button><button onClick={()=>{setTutorialStep(0);setMenu("tutorial");}} aria-label="How to play">?</button><button onClick={()=>setMenu("settings")} aria-label="Settings">⚙</button></div>
       {settings.hints&&role==="friend"&&<div className="hint-chip">{tasksDone<ALL_ZONES.length?"NEXT · "+ZONES[ALL_ZONES.find(z=>!tasks[z])||"hatch"].name:"Watch routes · compare testimony · eject the Mimic"}</div>}
