@@ -697,6 +697,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const roundEndedRef=useRef(false);
   const roundSeedRef=useRef(Math.floor(Math.random()*0x7fffffff));
   const nextSabotageAtRef=useRef(0);
+  const [nextSabotageIn,setNextSabotageIn]=useState<number|null>(null);
   const sabotageHistoryRef=useRef<ZoneKey[]>([]);
   const sabotageRef=useRef<ActiveSabotage|null>(null);
   const sabotageWarningPlayedRef=useRef(0);
@@ -831,15 +832,23 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     if(!["role","play","meeting"].includes(phase))return;
     const tick=()=>{
       if(!roundDeadlineRef.current||roundEndedRef.current)return;
-      const left=Math.max(0,Math.ceil((roundDeadlineRef.current-Date.now())/1000));
+      const now=Date.now();
+      const left=Math.max(0,Math.ceil((roundDeadlineRef.current-now)/1000));
       setTimer(left);
+      if(!roundEndedRef.current&&!mimicCaughtRef.current&&!sabotageRef.current&&nextSabotageAtRef.current>0){
+        const sabotageLeft=Math.max(0,Math.ceil((nextSabotageAtRef.current-now)/1000));
+        setNextSabotageIn(sabotageLeft);
+        if(now>=nextSabotageAtRef.current){
+          nextSabotageAtRef.current=0;setNextSabotageIn(null);
+          const last=sabotageHistoryRef.current[sabotageHistoryRef.current.length-1];
+          const zone:ZoneKey=sabotageHistoryRef.current.length===0?"lamp":choose((["lamp","lamp","lamp","lamp","hatch","shed","pond","shrine","ward"] as ZoneKey[]).filter(z=>z!=="lamp"||last!=="lamp"));
+          triggerSabotage(zone);
+        }
+      }else if(sabotageRef.current||mimicCaughtRef.current){setNextSabotageIn(null);}
       if(left<=0){
         const done=Object.values(tasksRef.current).every(Boolean);
-        const caught=mimicCaughtRef.current;
-        if(done&&caught)finish("won","Sunrise. Containment held and the Mimic was identified.");
-        else if(!done&&!caught)finish("lost","06:00 — containment is incomplete and the Mimic is still hidden. The night is lost.");
-        else if(!done)finish("lost","06:00 — the Mimic was found, but unfinished containment stations failed at sunrise.");
-        else finish("lost","06:00 — every station is secure, but the Mimic is still among the Keepers.");
+        if(done)finish("won","Sunrise. All six Garden stations are secure.");
+        else finish("lost",mimicCaughtRef.current?"06:00 — the Mimic was exposed, but unfinished Garden stations failed at sunrise.":"06:00 — containment is incomplete. The Garden is lost.");
       }
     };
     tick();
@@ -1096,7 +1105,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     const now=Date.now();
     roundDeadlineRef.current=now+ROUND_SECONDS*1000;
     lastKill.current=performance.now();
-    scheduleMimicSabotage(8000,"lamp");
+    nextSabotageAtRef.current=now+8000;setNextSabotageIn(8);
     setTimer(ROUND_SECONDS);
     setMessage("Night started. Secure all 6 stations before 06:00. Watch for the Mimic's sabotage.");
   }
@@ -1109,7 +1118,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     roundSeedRef.current=seed;puzzleTargetsRef.current=makePuzzleTargets(seed);
     roundEndedRef.current=false;roundDeadlineRef.current=0;
     lastKill.current=0;lastAutoReport.current=0;
-    nextSabotageAtRef.current=0;sabotageScheduleGenerationRef.current++;
+    nextSabotageAtRef.current=0;setNextSabotageIn(null);sabotageScheduleGenerationRef.current++;
     sabotageHistoryRef.current=[];sabotageRef.current=null;mimicCaughtRef.current=false;
     setRole(chosen);setPhase("role");setTimer(ROUND_SECONDS);setLights(true);setLightsFlickering(false);setHatchPanic(false);
     tasksRef.current=emptyTasks;setTasks(emptyTasks);setUnstableTasks(emptyTasks);setLastSabotagedZone(null);setActiveSabotage(null);setSabotageSeconds(0);setMimicCaught(false);setMilestone(null);
@@ -1135,23 +1144,11 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     else puzzleTargetsRef.current={...current,ward:fresh.ward};
   }
 
-  function scheduleMimicSabotage(delayMs:number,forcedZone?:ZoneKey){
-    const generation=++sabotageScheduleGenerationRef.current;
-    nextSabotageAtRef.current=Date.now()+delayMs;
-    window.setTimeout(()=>{
-      if(generation!==sabotageScheduleGenerationRef.current||roundEndedRef.current||mimicCaughtRef.current||!roundDeadlineRef.current)return;
-      if(sabotageRef.current){scheduleMimicSabotage(2500,forcedZone);return;}
-      const last=sabotageHistoryRef.current[sabotageHistoryRef.current.length-1];
-      const zone:ZoneKey=forcedZone??choose((["lamp","lamp","lamp","lamp","hatch","shed","pond","shrine","ward"] as ZoneKey[]).filter(z=>z!=="lamp"||last!=="lamp"));
-      triggerSabotage(zone);
-    },delayMs);
-  }
-
   function clearSabotage(zone:ZoneKey){
     const active=sabotageRef.current;
     if(!active||active.zone!==zone)return;
     sabotageRef.current=null;setActiveSabotage(null);setSabotageSeconds(0);setLastSabotagedZone(null);
-    scheduleMimicSabotage(16000+Math.floor(Math.random()*12000));
+    const delay=16000+Math.floor(Math.random()*12000);nextSabotageAtRef.current=Date.now()+delay;setNextSabotageIn(Math.ceil(delay/1000));
   }
 
   function triggerSabotage(zone:ZoneKey){
@@ -1437,6 +1434,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       if(phase!=="play"||paused||menu)return;const r=e.currentTarget.getBoundingClientRect();destination.current={x:cam.current.x+((e.clientX-r.left)*VIEW.width/r.width)/settings.cameraZoom,y:cam.current.y+((e.clientY-r.top)*VIEW.height/r.height)/settings.cameraZoom};
     }}/>
     {roundDeadlineRef.current>0&&(phase==="play"||phase==="meeting")&&<div className={"round-clock-global "+(timer<=60?"urgent":"")}><span>ROUND CLOCK</span><b>{countdown}</b><small>never pauses</small></div>}
+    {roundDeadlineRef.current>0&&phase==="play"&&!activeSabotage&&!mimicCaught&&nextSabotageIn!==null&&<div className="sabotage-armed"><span>MIMIC</span><b>SABOTAGE IN {nextSabotageIn}s</b></div>}
     {activeSabotage&&(phase==="play"||phase==="meeting")&&<div className={"sabotage-countdown sabotage-"+activeSabotage.kind}><span>ACTIVE SABOTAGE</span><b>{activeSabotage.label}</b><em>{ZONES[activeSabotage.zone].name} · {sabotageSeconds}s</em><small>Repair before zero or the round ends — meetings do not pause it.</small><i style={{width:Math.max(0,Math.min(100,(sabotageSeconds/Math.max(1,(activeSabotage.deadlineAt-activeSabotage.startedAt)/1000))*100))+"%"}}/></div>}
 
     {phase==="play"&&<>
