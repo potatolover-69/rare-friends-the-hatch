@@ -82,7 +82,7 @@ const PERSONALITIES:Personality[]=["careful","nervous","direct","quiet","watchfu
 const DEFAULT_SETTINGS:GameSettings={graphics:"high",fps:60,cameraZoom:1,brightness:1,fog:55,grain:22,master:75,music:42,ambience:62,sfx:78,reducedMotion:false,screenShake:true,hints:true};
 const ROUND_SECONDS=360;
 const SHOP_ITEMS:{kind:ShopKind;name:string;price:string;units:number;icon:string;desc:string;use:string}[]=[
-  {kind:"flashlight",name:"Field Flashlight",price:"0.10 RF",units:1,icon:"◐",desc:"Reusable light body with one full charge. Blackouts are the Mimic's favorite sabotage.",use:"Toggle with F"},
+  {kind:"flashlight",name:"Field Flashlight",price:"0.10 RF",units:1,icon:"◐",desc:"Reusable light body with one full charge. Keep it ready for sudden power failures.",use:"Toggle with F"},
   {kind:"battery",name:"Battery Pack",price:"0.20 RF",units:2,icon:"▰",desc:"Single-use full flashlight recharge. Consumed when installed.",use:"BURN · Use from HUD"},
   {kind:"uv",name:"UV Trace Scanner",price:"0.20 RF",units:2,icon:"UV",desc:"Single-use meeting scan that adds one ambiguous route inconsistency.",use:"BURN · Meeting use"},
   {kind:"flare",name:"Emergency Flare",price:"0.30 RF",units:3,icon:"✦",desc:"Single-use emergency light for 12 seconds. It does not repair Lamp Court.",use:"BURN · Use from HUD"},
@@ -842,9 +842,11 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
         setNextSabotageIn(sabotageLeft);
         if(now>=nextSabotageAtRef.current){
           nextSabotageAtRef.current=0;setNextSabotageIn(null);
-          const zone:ZoneKey=sabotageHistoryRef.current.length===0
+          const recent=sabotageHistoryRef.current.slice(-2);
+          const forceLights=recent.length===2&&recent.every(z=>z!=="lamp");
+          const zone:ZoneKey=sabotageHistoryRef.current.length===0||forceLights
             ?"lamp"
-            :choose(["lamp","lamp","lamp","lamp","lamp","lamp","hatch","shed","pond","shrine","ward"] as ZoneKey[]);
+            :choose(["lamp","lamp","lamp","lamp","lamp","lamp","lamp","hatch","shed","pond","shrine","ward"] as ZoneKey[]);
           triggerSabotage(zone);
         }
       }else if(sabotageRef.current||mimicCaughtRef.current){setNextSabotageIn(null);}
