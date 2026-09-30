@@ -700,6 +700,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const sabotageHistoryRef=useRef<ZoneKey[]>([]);
   const sabotageRef=useRef<ActiveSabotage|null>(null);
   const sabotageWarningPlayedRef=useRef(0);
+  const sabotageScheduleGenerationRef=useRef(0);
   const mimicCaughtRef=useRef(false);
   const puzzleTargetsRef=useRef<PuzzleTargets>(makePuzzleTargets(PROFILE.seed));
 
@@ -958,13 +959,6 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
           const currentAgents=agentsRef.current;
           const mimic=currentAgents.find(a=>a.id==="mimic");
           if(mimic?.alive){
-            if(roundDeadlineRef.current>0&&!sabotageRef.current&&Date.now()>=nextSabotageAtRef.current){
-              const sabotageZone:ZoneKey=sabotageHistoryRef.current.length===0
-                ?"lamp"
-                :choose((["lamp","lamp","lamp","lamp","hatch","shed","pond","shrine","ward"] as ZoneKey[]).filter(z=>z!=="lamp"||sabotageHistoryRef.current[sabotageHistoryRef.current.length-1]!=="lamp"));
-              triggerSabotage(sabotageZone);
-              agentsRef.current=agentsRef.current.map(a=>a.alive&&dist(a.p,ZONES[sabotageZone].p)<280?{...a,suspicion:a.suspicion+.45}:a);
-            }
             if(roundDeadlineRef.current>0&&lastKill.current>0&&now-lastKill.current>12500){
               const victims=currentAgents.filter(a=>a.alive&&a.id!=="mimic"&&dist(a.p,mimic.p)<115);
               const victim=victims[0];
@@ -1102,7 +1096,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     const now=Date.now();
     roundDeadlineRef.current=now+ROUND_SECONDS*1000;
     lastKill.current=performance.now();
-    nextSabotageAtRef.current=now+8000;
+    scheduleMimicSabotage(8000,"lamp");
     setTimer(ROUND_SECONDS);
     setMessage("Night started. Complete all 6 stations and expose the Mimic before 06:00.");
   }
@@ -1115,7 +1109,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     roundSeedRef.current=seed;puzzleTargetsRef.current=makePuzzleTargets(seed);
     roundEndedRef.current=false;roundDeadlineRef.current=0;
     lastKill.current=0;lastAutoReport.current=0;
-    nextSabotageAtRef.current=0;
+    nextSabotageAtRef.current=0;sabotageScheduleGenerationRef.current++;
     sabotageHistoryRef.current=[];sabotageRef.current=null;mimicCaughtRef.current=false;
     setRole(chosen);setPhase("role");setTimer(ROUND_SECONDS);setLights(true);setLightsFlickering(false);setHatchPanic(false);
     tasksRef.current=emptyTasks;setTasks(emptyTasks);setUnstableTasks(emptyTasks);setLastSabotagedZone(null);setActiveSabotage(null);setSabotageSeconds(0);setMimicCaught(false);setMilestone(null);
@@ -1141,11 +1135,23 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     else puzzleTargetsRef.current={...current,ward:fresh.ward};
   }
 
+  function scheduleMimicSabotage(delayMs:number,forcedZone?:ZoneKey){
+    const generation=++sabotageScheduleGenerationRef.current;
+    nextSabotageAtRef.current=Date.now()+delayMs;
+    window.setTimeout(()=>{
+      if(generation!==sabotageScheduleGenerationRef.current||roundEndedRef.current||mimicCaughtRef.current||!roundDeadlineRef.current)return;
+      if(sabotageRef.current){scheduleMimicSabotage(2500,forcedZone);return;}
+      const last=sabotageHistoryRef.current[sabotageHistoryRef.current.length-1];
+      const zone:ZoneKey=forcedZone??choose((["lamp","lamp","lamp","lamp","hatch","shed","pond","shrine","ward"] as ZoneKey[]).filter(z=>z!=="lamp"||last!=="lamp"));
+      triggerSabotage(zone);
+    },delayMs);
+  }
+
   function clearSabotage(zone:ZoneKey){
     const active=sabotageRef.current;
     if(!active||active.zone!==zone)return;
     sabotageRef.current=null;setActiveSabotage(null);setSabotageSeconds(0);setLastSabotagedZone(null);
-    nextSabotageAtRef.current=Date.now()+16000+Math.floor(Math.random()*12000);
+    scheduleMimicSabotage(16000+Math.floor(Math.random()*12000));
   }
 
   function triggerSabotage(zone:ZoneKey){
