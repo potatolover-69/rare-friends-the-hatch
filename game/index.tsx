@@ -720,6 +720,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const [sabotageSeconds,setSabotageSeconds]=useState(0);
   const [mimicCaught,setMimicCaught]=useState(false);
   const [milestone,setMilestone]=useState<string|null>(null);
+  const [glitchFlash,setGlitchFlash]=useState<"mimic"|"loss"|null>(null);
+  const glitchTimerRef=useRef<number|undefined>(undefined);
   const [lights,setLights]=useState(true);
   const [hatchPanic,setHatchPanic]=useState(false);
   const [meetingReason,setMeetingReason]=useState("");
@@ -1321,6 +1323,12 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     setRoundNotes(prev=>[...prev.slice(-8),reason]);sound.current?.play("select");hatchAudio.current?.cue("meeting");hatchAudio.current?.siren();
   }
 
+  function triggerGlitch(kind:"mimic"|"loss",duration=900){
+    if(glitchTimerRef.current)window.clearTimeout(glitchTimerRef.current);
+    setGlitchFlash(kind);
+    glitchTimerRef.current=window.setTimeout(()=>setGlitchFlash(null),duration);
+  }
+
   function vote(id:string){
     const candidates=agentsRef.current.filter(a=>a.alive),tally:Record<string,number>={[id]:1};
     for(const voter of candidates){
@@ -1342,7 +1350,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     window.setTimeout(()=>{
       if(!accused){setMessage("Vote tied. Nobody was detained. The Mimic is still among the Keepers.");setRoundNotes(prev=>[...prev.slice(-8),"Meeting ended in a tie."]);setPhase("play");return;}
       if(role==="friend"&&accused.id==="mimic"){
-        mimicCaughtRef.current=true;setMimicCaught(true);hatchAudio.current?.sample("mimicFound");
+        mimicCaughtRef.current=true;setMimicCaught(true);triggerGlitch("mimic",1050);hatchAudio.current?.sample("mimicFound");
         updateAgents(xs=>xs.map(a=>a.id==="mimic"?{...a,alive:false,reported:true,lastAction:"detained after the vote"}:a));
         setMilestone("MIMIC EXPOSED");window.setTimeout(()=>setMilestone(null),2500);
         const done=Object.values(tasksRef.current).every(Boolean);
@@ -1382,7 +1390,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     if(result==="won"){const complete=Object.values(tasksRef.current).every(Boolean),reward=complete?.12:.10;setRfEarned(reward);text+=" The Garden is quiet again.";}
     setRoundNotes(prev=>[...prev.slice(-8),result==="won"?"All six stations were secured before sunrise.":"The night ended in failure."]);
     setPhase(result);setMessage(text);
-    if(result==="lost"){hatchAudio.current?.sample("lossJumpscare");window.setTimeout(()=>hatchAudio.current?.sample("lossGlitch"),1150);}
+    if(result==="lost"){triggerGlitch("loss",1800);hatchAudio.current?.sample("lossJumpscare");window.setTimeout(()=>hatchAudio.current?.sample("lossGlitch"),1150);}
     else{sound.current?.play("reward");hatchAudio.current?.cue("win");}
   }
 
@@ -1433,12 +1441,12 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     <canvas ref={canvas} width={VIEW.width} height={VIEW.height} className="game-canvas" onPointerDown={e=>{
       if(phase!=="play"||paused||menu)return;const r=e.currentTarget.getBoundingClientRect();destination.current={x:cam.current.x+((e.clientX-r.left)*VIEW.width/r.width)/settings.cameraZoom,y:cam.current.y+((e.clientY-r.top)*VIEW.height/r.height)/settings.cameraZoom};
     }}/>
+    {glitchFlash&&<div className={"screen-glitch "+glitchFlash} aria-hidden="true"><i/><i/><i/><span>{glitchFlash==="mimic"?"MIMIC EXPOSED":"SIGNAL LOST"}</span></div>}
     {roundDeadlineRef.current>0&&(phase==="play"||phase==="meeting")&&<div className={"round-clock-global "+(timer<=60?"urgent":"")}><span>ROUND CLOCK</span><b>{countdown}</b><small>never pauses</small></div>}
-    {roundDeadlineRef.current>0&&phase==="play"&&!activeSabotage&&!mimicCaught&&nextSabotageIn!==null&&<div className="sabotage-armed"><span>MIMIC</span><b>SABOTAGE IN {nextSabotageIn}s</b></div>}
     {activeSabotage&&(phase==="play"||phase==="meeting")&&<div className={"sabotage-countdown sabotage-"+activeSabotage.kind}><span>ACTIVE SABOTAGE</span><b>{activeSabotage.label}</b><em>{ZONES[activeSabotage.zone].name} · {sabotageSeconds}s</em><small>Repair before zero or the round ends — meetings do not pause it.</small><i style={{width:Math.max(0,Math.min(100,(sabotageSeconds/Math.max(1,(activeSabotage.deadlineAt-activeSabotage.startedAt)/1000))*100))+"%"}}/></div>}
 
     {phase==="play"&&<>
-      <div className="hud mission"><span>{roleLabel} // {clock} · {countdown} LEFT</span><b>{role==="friend"?"SECURE THE GARDEN + EXPOSE THE MIMIC":"BECOME ONE OF THEM"}</b><small>{role==="friend"?tasksDone+"/"+ALL_ZONES.length+" stations · "+(mimicCaught?"Mimic caught":"Mimic unknown"):aliveAgents.length+" Keepers remain"}</small></div>
+      <div className="hud mission"><span>{roleLabel} // NIGHT WATCH</span><b>{role==="friend"?"SECURE ALL 6 STATIONS":"BECOME ONE OF THEM"}</b><small>{role==="friend"?tasksDone+"/"+ALL_ZONES.length+" stations · "+(mimicCaught?"Mimic exposed":"Mimic active"):aliveAgents.length+" Keepers remain"}</small></div>
       <div className="hud-right-stack">
         <div className={"hud statusbox "+(lastSabotagedZone?"danger":"")}><b>{lightsFlickering?"VOLTAGE FAILURE":lights?"LIGHTS ONLINE":"BLACKOUT"}</b><span>{lastSabotagedZone?ZONES[lastSabotagedZone].name+" · REDO REQUIRED":hatchPanic?"HATCH SABOTAGED":"Containment stable"}</span></div>
         <div className="economy-hud"><b>{snapshot?.mode==="chain"?"FRIEND WALLET":"PREVIEW"} RF {formatRF(snapshot?.rfBalance)}</b><span>Spent {rfSpent.toFixed(2)} · Win +0.10–0.12* simulated</span></div>
@@ -1478,7 +1486,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       {meetingStage==="vote"&&<div className="meeting-card"><span>GARDEN MEETING · {countdown} LEFT</span><h2>{meetingReason}</h2><p>Who doesn't belong here? Evidence narrows possibilities, but never names the killer for you.</p><div className="meeting-guide"><span>1 · READ REPORTS</span><span>2 · CHECK EVIDENCE</span><span>3 · VOTE OR SKIP</span></div><div className="testimony"><b>KEEPER REPORTS</b>{testimony.map((t,i)=><div key={i}><strong>{t.name}</strong><span>{t.text}</span></div>)}</div><div className="evidence"><b>SYSTEM EVIDENCE</b>{evidence.map((e,i)=><span key={i}>• {e}</span>)}</div><div className="vote-grid">{agents.filter(a=>a.alive).map(a=><button key={a.id} onClick={()=>vote(a.id)}><b>{a.name}</b><small>{votes[a.id]?votes[a.id]+" votes":"VOTE"}</small></button>)}</div><button className="skip" onClick={()=>{setMessage("No one was ejected. The Mimic is still among the Keepers.");setPhase("play");}}>SKIP VOTE</button></div>}
     </div>}
 
-    {(phase==="won"||phase==="lost")&&<div className={"overlay end-overlay "+phase}>{phase==="won"&&<><div className="sunrise-rays"/><div className="victory-particles">{Array.from({length:18},(_,i)=><i key={i} style={{left:(8+(i*17)%88)+"%",animationDelay:(i*.08)+"s"}}/> )}</div></>}<div className={"end-card "+phase}><span>{phase==="won"?"THE GARDEN ENDURES":"THE GARDEN TOOK YOU"}</span><h1>{phase==="won"?"DAWN":"YOU WERE REPLACED"}</h1>{phase==="won"&&<div className="reward-pop"><small>SIMULATED RF REWARD</small><b>+{rewardDisplay.toFixed(2)} RF</b><em>Containment payout concept · no live reward distribution</em></div>}<p>{message}</p><div className="ledger"><span>Role {roleLabel}</span><span>Tasks {tasksDone}/{ALL_ZONES.length}</span><span>RF spent {rfSpent.toFixed(2)}</span><span>RF earned {rfEarned.toFixed(2)}*</span><span>Mimic {agents.find(a=>a.id==="mimic")?.name||"Unknown"}</span><span>*MVP reward simulated</span></div><div className="round-recap"><b>NIGHT LOG</b>{roundNotes.slice(-5).map((n,i)=><span key={i}>• {n}</span>)}</div><button onClick={start}>PLAY AGAIN</button></div></div>}
+    {(phase==="won"||phase==="lost")&&<div className={"overlay end-overlay "+phase}>{phase==="lost"&&<div className="loss-glitch-layer" aria-hidden="true"><i/><i/><i/></div>}{phase==="won"&&<><div className="sunrise-rays"/><div className="victory-particles">{Array.from({length:18},(_,i)=><i key={i} style={{left:(8+(i*17)%88)+"%",animationDelay:(i*.08)+"s"}}/> )}</div></>}<div className={"end-card "+phase}><span>{phase==="won"?"THE GARDEN ENDURES":"THE GARDEN TOOK YOU"}</span><h1>{phase==="won"?"DAWN":"YOU WERE REPLACED"}</h1>{phase==="won"&&<div className="reward-pop"><small>SIMULATED RF REWARD</small><b>+{rewardDisplay.toFixed(2)} RF</b><em>Containment payout concept · no live reward distribution</em></div>}<p>{message}</p><div className="ledger"><span>Role {roleLabel}</span><span>Tasks {tasksDone}/{ALL_ZONES.length}</span><span>RF spent {rfSpent.toFixed(2)}</span><span>RF earned {rfEarned.toFixed(2)}*</span><span>Mimic {agents.find(a=>a.id==="mimic")?.name||"Unknown"}</span><span>*MVP reward simulated</span></div><div className="round-recap"><b>NIGHT LOG</b>{roundNotes.slice(-5).map((n,i)=><span key={i}>• {n}</span>)}</div><button onClick={start}>PLAY AGAIN</button></div></div>}
 
     {menu==="task"&&activePuzzle&&<div className="task-overlay" role="dialog" aria-modal="true" aria-label={ZONES[activePuzzle].name+" task"}><div className={"task-puzzle task-"+activePuzzle}>
       <div className="task-puzzle-head"><div><span>CONTAINMENT TASK</span><h2>{ZONES[activePuzzle].name}</h2><p>{ZONES[activePuzzle].hint}</p></div><button onClick={()=>{setMenu(null);setActivePuzzle(null);}}>×</button></div>
