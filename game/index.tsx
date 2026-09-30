@@ -89,14 +89,14 @@ const SHOP_ITEMS:{kind:ShopKind;name:string;price:string;units:number;icon:strin
   {kind:"ward",name:"Containment Ward",price:"0.10 RF",units:1,icon:"◇",desc:"Instantly cancels an active Hatch breach.",use:"Use from HUD"},
 ];
 const TUTORIAL_STEPS=[
-  {eyebrow:"01 · MOVE + EXPLORE",title:"Enter the Garden",body:"Use WASD, Arrow keys, or tap the ground. Trees, rocks and structures have collision, so follow the wet paths and learn the landmarks.",key:"WASD / TAP"},
-  {eyebrow:"02 · USE THE MAP",title:"Know Where You Are",body:"Press M for the full Garden map. It shows six containment stations, roads, landmarks, completed tasks and sabotaged stations — but never reveals the Mimic.",key:"M · MAP"},
-  {eyebrow:"03 · SOLVE TASKS",title:"Containment Takes Work",body:"At a station press E when the action says PUZZLE or REPAIR. Each station has a different mini-puzzle. Completed stations build your alibi and stabilize the Garden.",key:"E · PUZZLE / REPAIR"},
-  {eyebrow:"04 · BUY + USE GEAR",title:"RF Night Market",body:"Press G to buy optional simulated-RF gear. Flashlight charge drains only while ON; Battery Packs refill it. Flares restore light, UV helps meetings and Wards counter Hatch sabotage.",key:"G SHOP · F LIGHT"},
-  {eyebrow:"05 · SURVIVE SABOTAGE",title:"The Mimic Can Undo Progress",body:"A secure station can be sabotaged and marked unstable. Lamp Court sabotage makes street lights flicker before blackout. Return to the marked station and solve its puzzle again.",key:"WATCH THE HUD + MAP"},
-  {eyebrow:"06 · REPORT THE DEAD",title:"Bodies Stay in the Garden",body:"A murdered Keeper freezes where they fell and a faint spirit remains beside the body. Stand close and press R to report. Another Keeper can discover the body first.",key:"R · REPORT"},
-  {eyebrow:"07 · LISTEN + VOTE",title:"Everyone Has a Story",body:"Reports trigger cinematic statements from every survivor. Compare what they claim with system evidence and what you personally saw. The Mimic speaks too and can lie. A wrong vote does not end the round.",key:"READ · COMPARE · VOTE"},
-  {eyebrow:"08 · EXPOSE THE MIMIC",title:"Survive Until Sunrise",body:"Keep the Garden stable and identify the Mimic before the team is wiped out. Winning shows a small simulated RF reward; spending is optional for the base deduction game.",key:"SURVIVE · EJECT · EARN"},
+  {eyebrow:"01 · YOUR GOAL",title:"Two Things Win the Night",body:"Before 06:00, complete all 6 Garden station tasks AND correctly expose the hidden Mimic. You need both. Finishing only the tasks or only finding the Mimic is not enough.",key:"6/6 TASKS + MIMIC FOUND"},
+  {eyebrow:"02 · MOVE + FIND STATIONS",title:"Follow the Garden Map",body:"Move with WASD / Arrow keys, or tap the ground. Press M to open the map. The six station markers are your task locations. Walk to a station until its interaction prompt appears.",key:"WASD / TAP · M MAP"},
+  {eyebrow:"03 · DO A STATION TASK",title:"Press E, Then Solve It",body:"At an unfinished station, press E to open its puzzle. Read the instruction inside that puzzle and solve it. A completed station counts toward the 6/6 objective.",key:"E · INTERACT / SOLVE"},
+  {eyebrow:"04 · SABOTAGE",title:"Red Means Go There Now",body:"The Mimic can sabotage a station. A red warning appears on the HUD and on that station's map marker. Go to the marked station and repair its puzzle before the sabotage countdown reaches 0 or you lose.",key:"RED MARKER · REPAIR BEFORE 0"},
+  {eyebrow:"05 · LIGHT + OPTIONAL GEAR",title:"Use Gear When You Need It",body:"Press F to toggle your flashlight. Press G for the optional RF Night Market. Batteries, flares, UV and wards can help, but buying gear is not required to win the base game.",key:"F LIGHT · G SHOP"},
+  {eyebrow:"06 · WHEN SOMEONE DIES",title:"Report a Body",body:"If you find a dead Keeper, stand close to the body and press R. This starts a meeting. AI Keepers can also discover and report bodies.",key:"R · REPORT"},
+  {eyebrow:"07 · MEETING + VOTE",title:"Find the Liar",body:"Listen to each Keeper's statement and compare routes, timing, sabotage logs and what you personally saw. The Mimic can lie. Vote for the Keeper you suspect; a wrong vote returns you to the Garden.",key:"STATEMENTS → EVIDENCE → VOTE"},
+  {eyebrow:"08 · START THE NIGHT",title:"The Clock Starts After This Manual",body:"The 06:00 round timer does not run while these opening instructions are on screen. Close the manual to enter the Garden; that is when the timer, Mimic kills and sabotage schedule begin.",key:"CLOSE MANUAL · BEGIN ROUND"},
 ] as const;
 
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
@@ -232,14 +232,14 @@ function FriendPortrait({sprites,name}:{sprites?:GenerationSprites;name:string})
 }
 
 function TutorialScene({step,sprites,friendId}:{step:number;sprites:GenerationSprites|null;friendId:bigint}){
-  if(step===0)return <div className="manual-demo movement-demo"><div className="manual-friend"><FriendPortrait sprites={sprites||undefined} name={"Friend #"+friendId.toString()}/><small>YOU</small></div><div className="key-cluster"><i>W</i><i>A</i><i>S</i><i>D</i></div><div className="trail"><i/><i/><i/><i/></div></div>;
-  if(step===1)return <div className="manual-demo map-demo"><svg viewBox="0 0 340 170" aria-hidden="true"><path d="M35 140 L120 92 L175 110 L245 54 L310 76"/><path d="M120 92 L76 38 M175 110 L228 142"/><circle cx="35" cy="140" r="6"/><circle cx="120" cy="92" r="7"/><circle cx="175" cy="110" r="7"/><circle cx="245" cy="54" r="7"/><circle cx="310" cy="76" r="7"/></svg><span className="map-you">YOU</span><b>KEEPERS ARE NOT SHOWN</b></div>;
-  if(step===2)return <div className="manual-demo puzzle-demo"><div className="relay-strip">{[1,2,3,4].map((n,i)=><i key={n} style={{"--d":(i*.28)+"s"} as CSSProperties}>{n}</i>)}</div><small>WATCH THE SIGNAL · REPEAT IT</small></div>;
-  if(step===3)return <div className="manual-demo gear-demo">{SHOP_ITEMS.slice(0,4).map(item=><div key={item.kind}><i>{item.icon}</i><span>{item.name}</span><small>{item.price}</small></div>)}</div>;
-  if(step===4)return <div className="manual-demo sabotage-demo"><div className="mini-lamp"/><div className="mini-alert"><span>GRID OVERLOAD</span><b>00:38</b><i/></div><small>IGNORE IT → ROUND LOST</small></div>;
-  if(step===5)return <div className="manual-demo report-demo"><div className="body-mark"><i/><i/></div><div className="ghost-mark"/><kbd>R</kbd><span>REPORT</span></div>;
-  if(step===6)return <div className="manual-demo testimony-demo"><div><b>MOTH</b><span>“I crossed Lamp Court before the alarm.”</span></div><div><b>ASH</b><span>“I saw someone double back near the pond.”</span></div><small>CLUES NARROW THE FIELD — THEY DO NOT NAME THE MIMIC</small></div>;
-  return <div className="manual-demo win-demo"><div className="sun-mark"/><div className="seal-mark">✓</div><b>6/6 STATIONS</b><span>MIMIC EXPOSED</span><small>MAKE IT TO SUNRISE</small></div>;
+  if(step===0)return <div className="manual-demo objective-demo"><div className="manual-friend"><FriendPortrait sprites={sprites||undefined} name={"Friend #"+friendId.toString()}/></div><div className="objective-check"><b>1</b><span>COMPLETE ALL 6 STATIONS</span></div><strong>+</strong><div className="objective-check"><b>2</b><span>EXPOSE THE MIMIC</span></div></div>;
+  if(step===1)return <div className="manual-demo route-demo"><div className="route-player">YOU</div><i>→</i><div className="route-map">M</div><i>→</i><div className="route-station">STATION</div><small>USE THE MAP TO PICK A TASK LOCATION</small></div>;
+  if(step===2)return <div className="manual-demo task-demo"><kbd>E</kbd><i>→</i><div className="task-card"><b>STATION PUZZLE</b><span>READ ITS INSTRUCTION</span><span>SOLVE IT</span></div><i>→</i><strong>1 / 6 ✓</strong></div>;
+  if(step===3)return <div className="manual-demo sabotage-demo"><div className="mini-alert"><span>⚠ SABOTAGE</span><b>00:38</b><i/></div><div className="danger-route">RED MAP MARKER → REPAIR STATION</div><small>COUNTDOWN 0 = ROUND LOST</small></div>;
+  if(step===4)return <div className="manual-demo gear-simple-demo"><kbd>F</kbd><span>FLASHLIGHT</span><kbd>G</kbd><span>OPTIONAL GEAR</span><small>YOU CAN WIN WITHOUT BUYING ITEMS</small></div>;
+  if(step===5)return <div className="manual-demo report-demo"><div className="body-mark"><i/><i/></div><div className="report-steps"><span>FIND BODY</span><b>→</b><kbd>R</kbd><b>→</b><span>MEETING</span></div></div>;
+  if(step===6)return <div className="manual-demo testimony-demo"><div><b>1 · LISTEN</b><span>Compare every Keeper's route.</span></div><div><b>2 · CHECK</b><span>Use logs and what you saw.</span></div><div><b>3 · VOTE</b><span>Choose one suspect.</span></div></div>;
+  return <div className="manual-demo start-demo"><b>06:00</b><span>PAUSED DURING OPENING MANUAL</span><i>→</i><strong>ENTER GARDEN</strong><small>TIMER · KILLS · SABOTAGE BEGIN</small></div>;
 }
 
 function drawFriend(ctx:CanvasRenderingContext2D,sprites:GenerationSprites,p:Point,facing:SpriteFacing,walking:boolean,frame:number,side:"left"|"right"){
@@ -958,7 +958,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
           const currentAgents=agentsRef.current;
           const mimic=currentAgents.find(a=>a.id==="mimic");
           if(mimic?.alive){
-            if(!sabotageRef.current&&Date.now()>=nextSabotageAtRef.current){
+            if(roundDeadlineRef.current>0&&!sabotageRef.current&&Date.now()>=nextSabotageAtRef.current){
               const recent=new Set(sabotageHistoryRef.current);
               let pool=ALL_ZONES.filter(z=>!recent.has(z));
               if(!pool.length)pool=[...ALL_ZONES];
@@ -966,7 +966,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
               triggerSabotage(sabotageZone);
               agentsRef.current=agentsRef.current.map(a=>a.alive&&dist(a.p,ZONES[sabotageZone].p)<280?{...a,suspicion:a.suspicion+.45}:a);
             }
-            if(now-lastKill.current>12500){
+            if(roundDeadlineRef.current>0&&lastKill.current>0&&now-lastKill.current>12500){
               const victims=currentAgents.filter(a=>a.alive&&a.id!=="mimic"&&dist(a.p,mimic.p)<115);
               const victim=victims[0];
               if(victim){
@@ -1098,15 +1098,25 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     return()=>{cancelAnimationFrame(raf);window.removeEventListener("keydown",kd);window.removeEventListener("keyup",ku)};
   },[sprites,npcSprites,phase,paused,menu,role,lights,lightsFlickering,hatchPanic,inventory.flashlight,flashlightOn,settings]);
 
+  function beginRoundClock(){
+    if(roundDeadlineRef.current||roundEndedRef.current)return;
+    const now=Date.now();
+    roundDeadlineRef.current=now+ROUND_SECONDS*1000;
+    lastKill.current=performance.now();
+    nextSabotageAtRef.current=now+24000+Math.floor(Math.random()*15000);
+    setTimer(ROUND_SECONDS);
+    setMessage("Night started. Complete all 6 stations and expose the Mimic before 06:00.");
+  }
+
   function start(){
     void hatchAudio.current?.resume();
     const chosen:Role="friend";
     const emptyTasks:Record<ZoneKey,boolean>={lamp:false,pond:false,hatch:false,shrine:false,shed:false,ward:false};
     const seed=Math.floor(Math.random()*0x7fffffff);
     roundSeedRef.current=seed;puzzleTargetsRef.current=makePuzzleTargets(seed);
-    roundEndedRef.current=false;roundDeadlineRef.current=Date.now()+ROUND_SECONDS*1000;
-    lastKill.current=performance.now();lastAutoReport.current=0;
-    nextSabotageAtRef.current=Date.now()+24000+Math.floor(Math.random()*15000);
+    roundEndedRef.current=false;roundDeadlineRef.current=0;
+    lastKill.current=0;lastAutoReport.current=0;
+    nextSabotageAtRef.current=0;
     sabotageHistoryRef.current=[];sabotageRef.current=null;mimicCaughtRef.current=false;
     setRole(chosen);setPhase("role");setTimer(ROUND_SECONDS);setLights(true);setLightsFlickering(false);setHatchPanic(false);
     tasksRef.current=emptyTasks;setTasks(emptyTasks);setUnstableTasks(emptyTasks);setLastSabotagedZone(null);setActiveSabotage(null);setSabotageSeconds(0);setMimicCaught(false);setMilestone(null);
@@ -1119,7 +1129,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     setTestimony([]);setRoundNotes(["Night began. Five Keepers entered the Garden."]);setRfEarned(0);setRewardDisplay(0);setFlashlightOn(false);
     setInventory(v=>v.flashlight>0?v:{...v,flashlight:1});setFlashlightBattery(v=>v>0?v:30);
     setMessage("You are a FRIEND. Secure all six stations and identify the Mimic before sunrise. The clock never pauses.");
-    setTimeout(()=>{if(!roundEndedRef.current){setPhase("play");if(!tutorialSeen){setTutorialStep(0);setMenu("tutorial");}}},2200);
+    setTimeout(()=>{if(!roundEndedRef.current){setPhase("play");if(!tutorialSeen){setTutorialStep(0);setMenu("tutorial");}else beginRoundClock();}},2200);
   }
 
   function rerollPuzzle(zone:ZoneKey){
@@ -1163,7 +1173,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     setEvidence(prev=>[...prev.slice(-4),"Sabotage log: "+ZONES[zone].name+" failed. More than one Keeper crossed that route, so the log is not a direct identification."]);
     setRoundNotes(prev=>[...prev.slice(-8),ZONES[zone].name+" sabotaged — "+meta.seconds+" seconds to repair."]);
     if(settings.screenShake&&!settings.reducedMotion)shakeUntil.current=performance.now()+500;
-    sound.current?.play("impact");hatchAudio.current?.cue("danger");
+    // Sabotage uses the dedicated sting only; do not layer legacy impact tones.
   }
 
   function toggleFlashlight(){
@@ -1422,7 +1432,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     <canvas ref={canvas} width={VIEW.width} height={VIEW.height} className="game-canvas" onPointerDown={e=>{
       if(phase!=="play"||paused||menu)return;const r=e.currentTarget.getBoundingClientRect();destination.current={x:cam.current.x+((e.clientX-r.left)*VIEW.width/r.width)/settings.cameraZoom,y:cam.current.y+((e.clientY-r.top)*VIEW.height/r.height)/settings.cameraZoom};
     }}/>
-    {(phase==="play"||phase==="meeting")&&<div className={"round-clock-global "+(timer<=60?"urgent":"")}><span>ROUND CLOCK</span><b>{countdown}</b><small>never pauses</small></div>}
+    {roundDeadlineRef.current>0&&(phase==="play"||phase==="meeting")&&<div className={"round-clock-global "+(timer<=60?"urgent":"")}><span>ROUND CLOCK</span><b>{countdown}</b><small>never pauses</small></div>}
     {activeSabotage&&(phase==="play"||phase==="meeting")&&<div className={"sabotage-countdown sabotage-"+activeSabotage.kind}><span>ACTIVE SABOTAGE</span><b>{activeSabotage.label}</b><em>{ZONES[activeSabotage.zone].name} · {sabotageSeconds}s</em><small>Repair before zero or the round ends — meetings do not pause it.</small><i style={{width:Math.max(0,Math.min(100,(sabotageSeconds/Math.max(1,(activeSabotage.deadlineAt-activeSabotage.startedAt)/1000))*100))+"%"}}/></div>}
 
     {phase==="play"&&<>
@@ -1505,7 +1515,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
 
     {menu==="tutorial"&&<div className="tutorial-overlay field-manual-overlay" role="dialog" aria-modal="true" aria-label="Keeper field manual">
       <div className="field-manual" key={tutorialStep}>
-        <header className="manual-header"><div><span>KEEPER FIELD MANUAL</span><b>GARDEN UNIT 06 · NIGHT PROTOCOL</b></div><em>FRIEND #{friendId.toString()}</em><button onClick={()=>{setTutorialSeen(true);setMenu(null);}} aria-label="Close field manual">×</button></header>
+        <header className="manual-header"><div><span>KEEPER FIELD MANUAL</span><b>GARDEN UNIT 06 · NIGHT PROTOCOL</b></div><em>FRIEND #{friendId.toString()}</em><button onClick={()=>{setTutorialSeen(true);setMenu(null);if(phase==="play")beginRoundClock();}} aria-label="Close field manual">×</button></header>
         <aside className="manual-index">{TUTORIAL_STEPS.map((step,i)=><button key={step.title} className={i===tutorialStep?"active":i<tutorialStep?"done":""} onClick={()=>setTutorialStep(i)}><i>{String(i+1).padStart(2,"0")}</i><span>{step.title}</span></button>)}</aside>
         <main className="manual-page">
           <div className="manual-kicker"><span>{TUTORIAL_STEPS[tutorialStep].eyebrow}</span><em>{tutorialStep+1} / {TUTORIAL_STEPS.length}</em></div>
