@@ -700,3 +700,42 @@ linear-gradient(160deg,rgba(14,21,15,.99),rgba(3,7,4,.995));border:1px solid rgb
   .sabotage-armed{top:64px!important}
   .sabotage-countdown{top:88px!important}
 }
+
+/* Final HUD spacing pass — keep the center lane clear. */
+.mission{width:238px!important;top:12px!important;padding:6px 9px!important}
+.mission span{font-size:7px!important}.mission b{font-size:11px!important}.mission small{font-size:8px!important}
+.round-clock-global{top:8px!important}
+.sabotage-countdown{top:64px!important;width:min(330px,40%)!important;padding:7px 10px 10px!important}
+.task-list{top:86px!important}
+.sabotage-armed{display:none!important}
+@media(max-width:700px){
+  .mission{left:6px!important;top:46px!important;width:150px!important;padding:5px 7px!important}
+  .mission b{font-size:8px!important}.mission small{display:none!important}
+  .round-clock-global{top:5px!important}
+  .hud-right-stack{top:43px!important}
+  .sabotage-countdown{top:100px!important;width:78%!important;max-width:330px!important}
+  .task-list{top:112px!important;max-width:138px!important}
+}
+
+/* Full-screen analog/digital corruption for Mimic reveal + failure. */
+.screen-glitch{position:absolute;inset:0;z-index:260;pointer-events:none;overflow:hidden;background:rgba(7,0,3,.18);animation:glitchFlash .16s steps(2,end) infinite}
+.screen-glitch:before,.screen-glitch:after{content:"";position:absolute;inset:-5%;background:repeating-linear-gradient(0deg,transparent 0 5px,rgba(255,255,255,.075) 6px,transparent 7px 11px);mix-blend-mode:screen}
+.screen-glitch:before{transform:translateX(-7px);filter:drop-shadow(9px 0 rgba(255,0,38,.42));animation:glitchSlice .11s steps(2,end) infinite}
+.screen-glitch:after{transform:translateX(8px);filter:drop-shadow(-10px 0 rgba(0,180,255,.28));animation:glitchSlice2 .13s steps(2,end) infinite}
+.screen-glitch>i{position:absolute;left:-8%;width:116%;height:9%;background:rgba(215,225,216,.12);mix-blend-mode:screen;filter:contrast(2)}
+.screen-glitch>i:nth-child(1){top:18%;animation:glitchBand .09s steps(2,end) infinite}.screen-glitch>i:nth-child(2){top:47%;height:4%;animation:glitchBand .14s steps(2,end) infinite reverse}.screen-glitch>i:nth-child(3){top:73%;height:13%;animation:glitchBand .12s steps(2,end) infinite}
+.screen-glitch>span{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font:900 clamp(24px,6vw,58px)/1 ui-monospace,monospace;letter-spacing:.13em;color:#f0ebe8;text-shadow:-7px 0 #8d0016,7px 0 #006b7d;white-space:nowrap;animation:glitchText .1s steps(2,end) infinite}
+.screen-glitch.loss{background:rgba(46,0,5,.34)}.screen-glitch.loss>span{color:#c80c20;text-shadow:-8px 0 #280006,7px 0 #d5d5d5}
+.loss-glitch-layer{position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none;opacity:.42;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(255,255,255,.035) 4px,transparent 5px 8px);animation:lossSignal .7s steps(2,end) infinite}
+.loss-glitch-layer i{position:absolute;left:-5%;width:110%;height:3px;background:rgba(179,7,24,.55);box-shadow:12px 0 rgba(220,220,220,.16)}
+.loss-glitch-layer i:nth-child(1){top:24%;animation:lossBand 1.15s steps(2,end) infinite}.loss-glitch-layer i:nth-child(2){top:51%;animation:lossBand .86s steps(2,end) infinite reverse}.loss-glitch-layer i:nth-child(3){top:78%;animation:lossBand 1.34s steps(2,end) infinite}
+.end-overlay.lost .end-card{z-index:2;animation:lostCardGlitch 2.1s steps(1,end) infinite}
+@keyframes glitchFlash{0%{opacity:.95;transform:none}25%{opacity:.72;transform:translate(3px,-1px)}50%{opacity:1;transform:translate(-4px,2px)}75%{opacity:.8;transform:translate(2px,1px)}100%{opacity:.96;transform:none}}
+@keyframes glitchSlice{0%{clip-path:inset(0 0 82% 0)}33%{clip-path:inset(38% 0 43% 0)}66%{clip-path:inset(74% 0 7% 0)}100%{clip-path:inset(18% 0 60% 0)}}
+@keyframes glitchSlice2{0%{clip-path:inset(62% 0 19% 0)}50%{clip-path:inset(12% 0 70% 0)}100%{clip-path:inset(43% 0 37% 0)}}
+@keyframes glitchBand{0%{transform:translateX(-7%)}50%{transform:translateX(11%)}100%{transform:translateX(-2%)}}
+@keyframes glitchText{0%{transform:translate(-50%,-50%)}25%{transform:translate(calc(-50% + 6px),calc(-50% - 2px)) skewX(5deg)}50%{transform:translate(calc(-50% - 7px),calc(-50% + 2px))}75%{transform:translate(calc(-50% + 2px),-50%) skewX(-4deg)}}
+@keyframes lossSignal{0%,92%{transform:none;filter:none}93%{transform:translateX(5px);filter:contrast(1.7)}96%{transform:translateX(-6px)}100%{transform:none}}
+@keyframes lossBand{0%,75%{transform:translateX(-12%);opacity:.15}78%{transform:translateX(18%);opacity:.9}84%{transform:translateX(-5%);opacity:.45}100%{transform:translateX(8%);opacity:.12}}
+@keyframes lostCardGlitch{0%,86%,100%{transform:none}87%{transform:translateX(3px) skewX(.6deg)}89%{transform:translateX(-4px)}91%{transform:translateX(1px)}}
+.reduced-motion .screen-glitch{animation:none}.reduced-motion .screen-glitch:before,.reduced-motion .screen-glitch:after,.reduced-motion .screen-glitch>i,.reduced-motion .screen-glitch>span,.reduced-motion .loss-glitch-layer,.reduced-motion .loss-glitch-layer i,.reduced-motion .end-overlay.lost .end-card{animation:none!important}
