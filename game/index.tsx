@@ -166,7 +166,11 @@ function createHatchAudio():HatchAudio|null{
   const applyVolumes=()=>{
     const master=currentMuted?0:currentSettings.master/100;
     track.muted=currentMuted;track.volume=Math.max(0,Math.min(1,master*(currentSettings.music/100)));
-    Object.values(sampleEls).forEach(el=>{el.muted=currentMuted;el.volume=Math.max(0,Math.min(1,master*(currentSettings.sfx/100)));});
+    Object.entries(sampleEls).forEach(([kind,el])=>{
+      el.muted=currentMuted;
+      const trim=kind==="sabotageHit"?.82:kind==="sabotage10s"?.95:1;
+      el.volume=Math.max(0,Math.min(1,master*(currentSettings.sfx/100)*trim));
+    });
     if(sfxBus&&context)sfxBus.gain.setTargetAtTime(master*(currentSettings.sfx/100),context.currentTime,.04);
   };
   const set=(settings:GameSettings,muted:boolean)=>{currentSettings=settings;currentMuted=muted;applyVolumes();};
@@ -970,7 +974,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
                   setRoundNotes(prev=>[...prev.slice(-8),victim.name+" went down near "+ZONES[killZone].name+"."]);
                   setMessage(victim.name+" is down. A Keeper may discover the body and call a meeting.");
                   if(settings.screenShake&&!settings.reducedMotion)shakeUntil.current=now+520;
-                  sound.current?.play("impact");hatchAudio.current?.cue("danger");
+                  // The supplied sabotage sting is the only sabotage-impact sound.
+    // Do not layer FriendSDK impact or the synthesized danger tone over it.
                 }
               }
             }
