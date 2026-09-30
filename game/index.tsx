@@ -10,6 +10,8 @@ import mainMusicUrl from "./assets/jorisvermeer-ominous-horror-game-background-4
 import flashlightSwitchUrl from "./assets/audio/sfx_flashlight_switch.mp3";
 import streetlightFlickerUrl from "./assets/audio/sfx_streetlight_flicker.mp3";
 import pageFlipUrl from "./assets/audio/sfx_page_flip.mp3";
+import sabotageHitUrl from "./assets/audio/sfx_sabotage_hit.mp3";
+import sabotage10sUrl from "./assets/audio/sfx_sabotage_10s.mp3";
 
 type Point={x:number;y:number};
 type Role="friend"|"mimic";
@@ -136,7 +138,7 @@ type HatchAudio={
   set:(settings:GameSettings,muted:boolean)=>void;
   cue:(kind:"meeting"|"danger"|"task"|"vote"|"win"|"lose")=>void;
   siren:()=>void;
-  sample:(kind:"flashlight"|"streetlightFlicker"|"pageFlip")=>void;
+  sample:(kind:"flashlight"|"streetlightFlicker"|"pageFlip"|"sabotageHit"|"sabotage10s")=>void;
   dispose:()=>void;
 };
 
@@ -155,6 +157,8 @@ function createHatchAudio():HatchAudio|null{
     flashlight:new Audio(FLASHLIGHT_SWITCH_URL),
     streetlightFlicker:new Audio(STREETLIGHT_FLICKER_URL),
     pageFlip:new Audio(pageFlipUrl),
+    sabotageHit:new Audio(sabotageHitUrl),
+    sabotage10s:new Audio(sabotage10sUrl),
   };
   Object.values(sampleEls).forEach(el=>{el.preload="auto";});
 
@@ -183,7 +187,7 @@ function createHatchAudio():HatchAudio|null{
       osc.connect(gain).connect(sfxBus);osc.start(start);osc.stop(start+.17);
     }
   };
-  const sample=(kind:"flashlight"|"streetlightFlicker"|"pageFlip")=>{
+  const sample=(kind:"flashlight"|"streetlightFlicker"|"pageFlip"|"sabotageHit"|"sabotage10s")=>{
     const el=sampleEls[kind];el.pause();el.currentTime=0;void el.play().catch(()=>{});
   };
   applyVolumes();
@@ -682,6 +686,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   const nextSabotageAtRef=useRef(0);
   const sabotageHistoryRef=useRef<ZoneKey[]>([]);
   const sabotageRef=useRef<ActiveSabotage|null>(null);
+  const sabotageWarningPlayedRef=useRef(0);
   const mimicCaughtRef=useRef(false);
   const puzzleTargetsRef=useRef<PuzzleTargets>(makePuzzleTargets(PROFILE.seed));
 
@@ -835,6 +840,10 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     const tick=()=>{
       const left=Math.max(0,Math.ceil((activeSabotage.deadlineAt-Date.now())/1000));
       setSabotageSeconds(left);
+      if(left<=10&&left>0&&sabotageWarningPlayedRef.current!==activeSabotage.deadlineAt){
+        sabotageWarningPlayedRef.current=activeSabotage.deadlineAt;
+        hatchAudio.current?.sample("sabotage10s");
+      }
       if(left<=0&&!roundEndedRef.current)finish("lost",activeSabotage.fatalText);
     };
     tick();
@@ -1107,7 +1116,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     if(sabotageRef.current||roundEndedRef.current||mimicCaughtRef.current)return;
     const meta=sabotageMeta(zone),now=Date.now();
     const active:ActiveSabotage={zone,kind:meta.kind,label:meta.label,startedAt:now,deadlineAt:now+meta.seconds*1000,fatalText:meta.fatalText};
-    sabotageRef.current=active;setActiveSabotage(active);setSabotageSeconds(meta.seconds);setLastSabotagedZone(zone);
+    sabotageRef.current=active;sabotageWarningPlayedRef.current=0;setActiveSabotage(active);setSabotageSeconds(meta.seconds);setLastSabotagedZone(zone);
+    void hatchAudio.current?.resume().then(()=>hatchAudio.current?.sample("sabotageHit"));
     const nextTasks={...tasksRef.current,[zone]:false};tasksRef.current=nextTasks;setTasks(nextTasks);
     setUnstableTasks(v=>({...v,[zone]:true}));rerollPuzzle(zone);
     sabotageHistoryRef.current=[...sabotageHistoryRef.current.slice(-1),zone];
