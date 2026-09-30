@@ -89,14 +89,14 @@ const SHOP_ITEMS:{kind:ShopKind;name:string;price:string;units:number;icon:strin
   {kind:"ward",name:"Containment Ward",price:"0.20 RF",units:2,icon:"◇",desc:"Single-use seal that instantly cancels an active Hatch breach.",use:"BURN · Use from HUD"},
 ];
 const TUTORIAL_STEPS=[
-  {eyebrow:"01 · YOUR GOAL",title:"Two Things Win the Night",body:"Before 06:00, complete all 6 Garden station tasks AND correctly expose the hidden Mimic. You need both. Finishing only the tasks or only finding the Mimic is not enough.",key:"6/6 TASKS + MIMIC FOUND"},
+  {eyebrow:"01 · YOUR GOAL",title:"Two Things Win the Night",body:"Secure all 6 Garden stations before 06:00 to win. Finding and exposing the Mimic can end its attacks early, but you do not need to catch it if you finish all six tasks first.",key:"6/6 TASKS = WIN"},
   {eyebrow:"02 · MOVE + FIND STATIONS",title:"Follow the Garden Map",body:"Move with WASD / Arrow keys, or tap the ground. Press M to open the map. The six station markers are your task locations. Walk to a station until its interaction prompt appears.",key:"WASD / TAP · M MAP"},
   {eyebrow:"03 · DO A STATION TASK",title:"Press E, Then Solve It",body:"At an unfinished station, press E to open its puzzle. Read the instruction inside that puzzle and solve it. A completed station counts toward the 6/6 objective.",key:"E · INTERACT / SOLVE"},
   {eyebrow:"04 · SABOTAGE",title:"Red Means Go There Now",body:"The Mimic always attacks Lamp Court first and often returns to the lights later. A red warning appears on the HUD and map. Use your flashlight during blackouts, reach the marked station and repair it before the countdown reaches 0.",key:"RED MARKER · REPAIR BEFORE 0"},
   {eyebrow:"05 · LIGHT + OPTIONAL GEAR",title:"Use Gear When You Need It",body:"Press F to toggle your flashlight. Press G for the optional RF Night Market. Batteries, flares, UV and wards can help, but buying gear is not required to win the base game.",key:"F LIGHT · G SHOP"},
   {eyebrow:"06 · WHEN SOMEONE DIES",title:"Report a Body",body:"If you find a dead Keeper, stand close to the body and press R. This starts a meeting. AI Keepers can also discover and report bodies.",key:"R · REPORT"},
   {eyebrow:"07 · MEETING + VOTE",title:"Find the Liar",body:"Listen to each Keeper's statement and compare routes, timing, sabotage logs and what you personally saw. The Mimic can lie. Vote for the Keeper you suspect; a wrong vote returns you to the Garden.",key:"STATEMENTS → EVIDENCE → VOTE"},
-  {eyebrow:"08 · START THE NIGHT",title:"The Clock Starts After This Manual",body:"The 06:00 round timer does not run while these opening instructions are on screen. Close the manual to enter the Garden; that is when the timer, Mimic kills and sabotage schedule begin.",key:"CLOSE MANUAL · BEGIN ROUND"},
+  {eyebrow:"08 · START THE NIGHT",title:"The Clock Starts After This Manual",body:"The 06:00 round timer does not run while these opening instructions are on screen. Press ENTER GARDEN to start the timer, Mimic kills and the sabotage schedule. The first Lamp Court sabotage follows shortly after.",key:"CLOSE MANUAL · BEGIN ROUND"},
 ] as const;
 
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
@@ -1098,7 +1098,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     lastKill.current=performance.now();
     scheduleMimicSabotage(8000,"lamp");
     setTimer(ROUND_SECONDS);
-    setMessage("Night started. Complete all 6 stations and expose the Mimic before 06:00.");
+    setMessage("Night started. Secure all 6 stations before 06:00. Watch for the Mimic's sabotage.");
   }
 
   function start(){
@@ -1215,9 +1215,8 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     if(zone==="hatch")setHatchPanic(false);
     setMilestone(allDone?"ALL STATIONS SECURE":"TASK SECURED · "+ZONES[zone].name.toUpperCase());
     window.setTimeout(()=>setMilestone(null),2200);
-    if(allDone&&mimicCaughtRef.current){finish("won","Containment complete. The Mimic was identified and every station is secure.");return;}
-    if(allDone)setMessage("Containment complete — excellent work. One objective remains: identify the Mimic before sunrise.");
-    else setMessage(ZONES[zone].name+" stabilized. "+nextCount+"/"+ALL_ZONES.length+" stations secure.");
+    if(allDone){finish("won",mimicCaughtRef.current?"All six stations are secure and the Mimic was exposed. You survived the Garden.":"All six stations are secure. You survived the Garden before the Mimic could break containment.");return;}
+    setMessage(ZONES[zone].name+" stabilized. "+nextCount+"/"+ALL_ZONES.length+" stations secure.");
   }
 
   function sequencePress(value:number){
@@ -1384,7 +1383,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
   function finish(result:"won"|"lost",text:string){
     if(roundEndedRef.current)return;roundEndedRef.current=true;setMenu(null);setFlashlightOn(false);
     if(result==="won"){const complete=Object.values(tasksRef.current).every(Boolean),reward=complete?.12:.10;setRfEarned(reward);text+=" The Garden is quiet again.";}
-    setRoundNotes(prev=>[...prev.slice(-8),result==="won"?"Both objectives completed before sunrise.":"The night ended in failure."]);
+    setRoundNotes(prev=>[...prev.slice(-8),result==="won"?"All six stations were secured before sunrise.":"The night ended in failure."]);
     setPhase(result);setMessage(text);
     if(result==="lost"){hatchAudio.current?.sample("lossJumpscare");window.setTimeout(()=>hatchAudio.current?.sample("lossGlitch"),1150);}
     else{sound.current?.play("reward");hatchAudio.current?.cue("win");}
@@ -1425,7 +1424,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
     const nextTasks={...tasksRef.current,hatch:true};tasksRef.current=nextTasks;setTasks(nextTasks);setUnstableTasks(v=>({...v,hatch:false}));
     setHatchPanic(false);clearSabotage("hatch");setMessage("Containment Ward consumed — the Hatch breach is sealed instantly.");
     sound.current?.play("reward");
-    if(Object.values(nextTasks).every(Boolean)&&mimicCaughtRef.current)finish("won","Containment complete. The Mimic was identified and every station is secure.");
+    if(Object.values(nextTasks).every(Boolean))finish("won",mimicCaughtRef.current?"All six stations are secure and the Mimic was exposed. You survived the Garden.":"All six stations are secure. You survived the Garden before the Mimic could break containment.");
   }
 
   const minute=Math.floor((ROUND_SECONDS-timer)/60);const clock=["12:00","1:00","2:00","3:00","4:00","5:00","6:00"][Math.min(6,minute)];
@@ -1450,7 +1449,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       {milestone&&<div className="milestone-pop"><b>{milestone}</b><span>{mimicCaughtRef.current&&Object.values(tasksRef.current).every(Boolean)?"Both objectives complete.":"Keep moving — the round clock is still running."}</span></div>}
       {currentZone&&<div className="zone-banner" key={currentZone}><b>{ZONES[currentZone].name.toUpperCase()}</b><span>{tasks[currentZone]?"SECURE":unstableTasks[currentZone]?"SABOTAGED · REPAIR REQUIRED":ZONES[currentZone].hint}</span></div>}
       <div className="utility-fabs"><button onClick={()=>setMenu("map")} aria-label="Map">MAP</button><button onClick={()=>{setTutorialStep(0);setMenu("tutorial");}} aria-label="How to play">?</button><button onClick={()=>setMenu("settings")} aria-label="Settings">⚙</button></div>
-      {settings.hints&&role==="friend"&&<div className="hint-chip">{tasksDone<ALL_ZONES.length?"NEXT · "+ZONES[ALL_ZONES.find(z=>!tasks[z])||"hatch"].name:"Watch routes · compare testimony · eject the Mimic"}</div>}
+      {settings.hints&&role==="friend"&&<div className="hint-chip">{tasksDone<ALL_ZONES.length?"NEXT · "+ZONES[ALL_ZONES.find(z=>!tasks[z])||"hatch"].name:"ALL STATIONS SECURE"}</div>}
       {role==="friend"&&<div className="task-list">{ALL_ZONES.map(z=><span key={z} className={tasks[z]?"done":unstableTasks[z]?"unstable":""}>{tasks[z]?"✓":unstableTasks[z]?"!":"□"} {ZONES[z].name}</span>)}</div>}
       <div className="minimap" onClick={()=>setMenu("map")} role="button" aria-label="Open Garden map"><b>GARDEN MAP · M</b><div className="mini-field">
         {ALL_ZONES.map(z=><i key={z} className={"mini-zone "+(tasks[z]?"done":unstableTasks[z]?"unstable":"")+(activeSabotage?.zone===z?" sabotage-alert":"")} style={{left:(ZONES[z].p.x/WORLD.width*100)+"%",top:(ZONES[z].p.y/WORLD.height*100)+"%"}} title={activeSabotage?.zone===z?"WARNING · "+ZONES[z].name+" · "+sabotageSeconds+"s":ZONES[z].name}>{activeSabotage?.zone===z&&<span>!</span>}</i>)}
@@ -1530,7 +1529,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
           <p>{TUTORIAL_STEPS[tutorialStep].body}</p>
           <TutorialScene step={tutorialStep} sprites={sprites} friendId={friendId}/>
           <div className="manual-control"><span>CONTROL</span><kbd>{TUTORIAL_STEPS[tutorialStep].key}</kbd></div>
-          <footer className="manual-actions"><button disabled={tutorialStep===0} onClick={()=>setTutorialStep(v=>Math.max(0,v-1))}>← PREVIOUS</button><span>Page {String(tutorialStep+1).padStart(2,"0")}</span>{tutorialStep<TUTORIAL_STEPS.length-1?<button className="primary" onClick={()=>{hatchAudio.current?.sample("pageFlip");setTutorialStep(v=>Math.min(TUTORIAL_STEPS.length-1,v+1));}}>NEXT PAGE →</button>:<button className="primary" onClick={()=>{setTutorialSeen(true);setMenu(null);setMessage("Field manual closed. Survive the night.");}}>ENTER GARDEN →</button>}</footer>
+          <footer className="manual-actions"><button disabled={tutorialStep===0} onClick={()=>setTutorialStep(v=>Math.max(0,v-1))}>← PREVIOUS</button><span>Page {String(tutorialStep+1).padStart(2,"0")}</span>{tutorialStep<TUTORIAL_STEPS.length-1?<button className="primary" onClick={()=>{hatchAudio.current?.sample("pageFlip");setTutorialStep(v=>Math.min(TUTORIAL_STEPS.length-1,v+1));}}>NEXT PAGE →</button>:<button className="primary" onClick={()=>{setTutorialSeen(true);setMenu(null);beginRoundClock();}}>ENTER GARDEN →</button>}</footer>
         </main>
       </div>
     </div>}
