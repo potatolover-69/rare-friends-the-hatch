@@ -1412,7 +1412,7 @@ export default function TheHatch({friendId,client,paused}:GameComponentProps){
       {settings.hints&&role==="friend"&&<div className="hint-chip">{tasksDone<ALL_ZONES.length?"NEXT · "+ZONES[ALL_ZONES.find(z=>!tasks[z])||"hatch"].name:"Watch routes · compare testimony · eject the Mimic"}</div>}
       {role==="friend"&&<div className="task-list">{ALL_ZONES.map(z=><span key={z} className={tasks[z]?"done":unstableTasks[z]?"unstable":""}>{tasks[z]?"✓":unstableTasks[z]?"!":"□"} {ZONES[z].name}</span>)}</div>}
       <div className="minimap" onClick={()=>setMenu("map")} role="button" aria-label="Open Garden map"><b>GARDEN MAP · M</b><div className="mini-field">
-        {ALL_ZONES.map(z=><i key={z} className={"mini-zone "+(tasks[z]?"done":unstableTasks[z]?"unstable":"")} style={{left:(ZONES[z].p.x/WORLD.width*100)+"%",top:(ZONES[z].p.y/WORLD.height*100)+"%"}} title={ZONES[z].name}/>)}
+        {ALL_ZONES.map(z=><i key={z} className={"mini-zone "+(tasks[z]?"done":unstableTasks[z]?"unstable":"")+(activeSabotage?.zone===z?" sabotage-alert":"")} style={{left:(ZONES[z].p.x/WORLD.width*100)+"%",top:(ZONES[z].p.y/WORLD.height*100)+"%"}} title={activeSabotage?.zone===z?"WARNING · "+ZONES[z].name+" · "+sabotageSeconds+"s":ZONES[z].name}>{activeSabotage?.zone===z&&<span>!</span>}</i>)}
         <i className="mini-player" style={{left:(pos.current.x/WORLD.width*100)+"%",top:(pos.current.y/WORLD.height*100)+"%"}}/>
       </div></div>
       {inventory.flashlight>0&&<div className={"battery-meter "+(flashlightBattery<20?"low":"")}><span>FLASHLIGHT</span><div><i style={{width:flashlightBattery+"%"}}/></div><b>{Math.round(flashlightBattery)}%</b></div>}
